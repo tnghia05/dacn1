@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build / cache
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE (keep optional VS Code extensions list if present)
+.idea/
