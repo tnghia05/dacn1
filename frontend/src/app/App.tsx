@@ -68,7 +68,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CartProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
             <Routes>
               <Route element={<SiteLayout />}>
                 <Route path="/" element={<HomePage />} />
