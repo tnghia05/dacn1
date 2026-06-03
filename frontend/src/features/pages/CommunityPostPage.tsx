@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Btn, SectionHeader } from '../../shared/components/Ui'
 import { MemberBadge } from '../../shared/components/MemberBadge'
 import { getTierFromPoints, TIER_CONFIG } from '../../shared/utils/membership'
+import { CommentDigestPanel } from '../../shared/components/CommentDigestPanel'
 
 function getPointsForAuthor(authorId: string, customPoints?: number): number {
   if (customPoints !== undefined) return customPoints
@@ -321,6 +322,8 @@ export function CommunityPostPage() {
               </button>
             }
           />
+
+          <CommentDigestPanel postId={id!} />
 
           {isLoggedIn ? (
             <form onSubmit={onPostComment} className="surface-card" style={{ marginTop: '0.85rem' }}>
