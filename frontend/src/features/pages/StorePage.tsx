@@ -38,7 +38,7 @@ export function StorePage() {
   const products = data?.items ?? []
 
   function handleAddToCart(p: Product) {
-    addItem({ productId: p._id, name: p.name, price: p.price, imageUrl: p.imageUrl, qty: 1 })
+    addItem({ productId: p._id, name: p.name, price: p.price, imageUrl: p.imageUrls?.[0] ?? p.imageUrl, qty: 1 })
     setAdded(p._id)
     setTimeout(() => setAdded(null), 1500)
   }
@@ -57,11 +57,16 @@ export function StorePage() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
         <Tabs tabs={categories} active={cat} onChange={setCat} />
-        <select className="tab" value={sort} onChange={e => setSort(e.target.value)}>
-          <option value="featured">Sắp xếp: Nổi bật</option>
-          <option value="price-asc">Giá: thấp đến cao</option>
-          <option value="price-desc">Giá: cao đến thấp</option>
-        </select>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Link to="/points/store">
+            <Btn variant="ghost" style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}>🏆 Đổi điểm</Btn>
+          </Link>
+          <select className="tab" value={sort} onChange={e => setSort(e.target.value)}>
+            <option value="featured">Sắp xếp: Nổi bật</option>
+            <option value="price-asc">Giá: thấp đến cao</option>
+            <option value="price-desc">Giá: cao đến thấp</option>
+          </select>
+        </div>
       </div>
 
       <SectionHeader title="Sản phẩm" subtitle={data ? `${data.total} mẫu` : '…'} />
@@ -76,9 +81,14 @@ export function StorePage() {
         {products.map((p) => (
           <div key={p._id} className="product-card" style={{ display: 'flex', flexDirection: 'column' }}>
             <Link to={`/store/${p._id}`} style={{ color: 'inherit', display: 'contents' }}>
-              <div className="product-card-img" style={{ backgroundImage: `url(${p.imageUrl})` }}>
+          <div className="product-card-img" style={{ backgroundImage: `url(${p.imageUrls?.[0] ?? p.imageUrl})` }}>
                 {p.badge && <span className="product-badge">{p.badge}</span>}
                 {p.stock === 0 && <span className="product-badge" style={{ background: 'rgb(100 100 100 / 90%)' }}>Hết hàng</span>}
+                {p.pointsPrice && p.pointsPrice > 0 && (
+                  <span className="product-badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent-2)', border: '1px solid var(--accent-line)', bottom: 8, top: 'auto', right: 8, left: 'auto', position: 'absolute' }}>
+                    🏆 {p.pointsPrice.toLocaleString('vi-VN')} đ
+                  </span>
+                )}
               </div>
             </Link>
             <div className="product-card-body" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>

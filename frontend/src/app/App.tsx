@@ -5,11 +5,13 @@ import { CartProvider } from '../contexts/CartContext'
 import { SiteLayout } from '../layouts/SiteLayout'
 import { PrivateRoute } from '../shared/components/PrivateRoute'
 import { AdminAnalyticsPage } from '../features/pages/AdminAnalyticsPage'
+import { AdminPredictionsPage } from '../features/pages/AdminPredictionsPage'
 import { AdminCommentsPage } from '../features/pages/AdminCommentsPage'
 import { AdminDashboardPage } from '../features/pages/AdminDashboardPage'
 import { AdminModerationPage } from '../features/pages/AdminModerationPage'
 import { AdminPostsPage } from '../features/pages/AdminPostsPage'
 import { AdminUsersPage } from '../features/pages/AdminUsersPage'
+import { AdminProductsPage } from '../features/pages/AdminProductsPage'
 import { CartPage } from '../features/pages/CartPage'
 import { CheckoutPage } from '../features/pages/CheckoutPage'
 import { CommunityPage } from '../features/pages/CommunityPage'
@@ -46,6 +48,10 @@ import { TournamentsPage } from '../features/pages/TournamentsPage'
 import { TrendingPage } from '../features/pages/TrendingPage'
 import { GridSeriesPage } from '../features/pages/GridSeriesPage'
 import { GridSeriesDetailPage } from '../features/pages/GridSeriesDetailPage'
+import { PointsPage } from '../features/pages/PointsPage'
+import { PredictionsPage } from '../features/pages/PredictionsPage'
+import { PointsStorePage } from '../features/pages/PointsStorePage'
+import { VipPage } from '../features/pages/VipPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +86,7 @@ function App() {
                 <Route path="/players/detail" element={<PlayerDetailPage />} />
                 <Route path="/comparison" element={<ComparisonPage />} />
                 <Route path="/tournaments" element={<TournamentsPage />} />
+                <Route path="/tournaments/:slug" element={<TournamentDetailPage />} />
                 <Route path="/tournaments/detail" element={<TournamentDetailPage />} />
                 <Route path="/community" element={<CommunityPage />} />
                 <Route path="/community/post" element={<CommunityPostPage />} />
@@ -105,6 +112,11 @@ function App() {
                 <Route path="/profile/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
                 <Route path="/orders" element={<PrivateRoute><OrdersPage /></PrivateRoute>} />
                 <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
+                <Route path="/points" element={<PrivateRoute><PointsPage /></PrivateRoute>} />
+                <Route path="/points/predictions" element={<PrivateRoute><PredictionsPage /></PrivateRoute>} />
+                <Route path="/points/store" element={<PointsStorePage />} />
+                <Route path="/vip" element={<VipPage />} />
+                <Route path="/predictions" element={<PrivateRoute><PredictionsPage /></PrivateRoute>} />
                 <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                 <Route path="/admin/dashboard" element={<PrivateRoute><AdminDashboardPage /></PrivateRoute>} />
                 <Route path="/admin/users" element={<PrivateRoute><AdminUsersPage /></PrivateRoute>} />
@@ -112,6 +124,8 @@ function App() {
                 <Route path="/admin/comments" element={<PrivateRoute><AdminCommentsPage /></PrivateRoute>} />
                 <Route path="/admin/moderation" element={<PrivateRoute><AdminModerationPage /></PrivateRoute>} />
                 <Route path="/admin/analytics" element={<PrivateRoute><AdminAnalyticsPage /></PrivateRoute>} />
+                <Route path="/admin/predictions" element={<PrivateRoute><AdminPredictionsPage /></PrivateRoute>} />
+                <Route path="/admin/products" element={<PrivateRoute><AdminProductsPage /></PrivateRoute>} />
                 <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Routes>

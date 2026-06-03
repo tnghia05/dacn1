@@ -1308,9 +1308,10 @@ input.tab:focus {
   padding: 1rem 1.15rem;
   display: grid;
   gap: 0.55rem;
-  background: linear-gradient(180deg, var(--accent-soft), transparent 75%), var(--surface);
+  background: linear-gradient(180deg, rgb(79 141 247 / 12%), transparent 75%), var(--surface);
   border: 1px solid var(--accent-line);
   overflow: hidden;
+  box-shadow: 0 0 28px rgb(79 141 247 / 10%), inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
 .ai-panel::before {
@@ -1321,7 +1322,7 @@ input.tab:focus {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(120 80 220 / 22%) 0%, transparent 70%);
+  background: radial-gradient(circle, rgb(120 80 220 / 30%) 0%, transparent 70%);
   pointer-events: none;
   transform: translate(40%, -40%);
 }
@@ -1362,55 +1363,108 @@ input.tab:focus {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
+  padding: 0.22rem 0.6rem;
   border-radius: 999px;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: linear-gradient(90deg, rgb(79 141 247 / 22%), rgb(139 92 246 / 22%));
-  border: 1px solid var(--accent-line);
-  color: var(--accent-2);
+  background: linear-gradient(90deg, rgb(79 141 247 / 28%), rgb(139 92 246 / 28%));
+  border: 1px solid rgb(122 168 255 / 50%);
+  color: #a5c4ff;
+  box-shadow: 0 0 12px rgb(79 141 247 / 30%), inset 0 1px 0 rgb(255 255 255 / 8%);
+  animation: ai-badge-pulse 3s ease-in-out infinite;
+}
+
+@keyframes ai-badge-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgb(79 141 247 / 30%), inset 0 1px 0 rgb(255 255 255 / 8%); }
+  50% { box-shadow: 0 0 22px rgb(79 141 247 / 55%), 0 0 40px rgb(139 92 246 / 20%), inset 0 1px 0 rgb(255 255 255 / 8%); }
 }
 
 .ai-tag::before {
   content: '✦';
   font-size: 0.72rem;
+  animation: ai-sparkle 2.4s ease-in-out infinite;
 }
 
 /* Big AI hero card */
 .ai-hero {
   position: relative;
   border-radius: var(--r-lg);
-  padding: 1.5rem 1.65rem;
-  background: linear-gradient(135deg, rgb(79 141 247 / 14%) 0%, rgb(139 92 246 / 12%) 50%, rgb(255 255 255 / 0%) 100%),
+  padding: 1.75rem 1.85rem;
+  background:
+    linear-gradient(135deg, rgb(79 141 247 / 18%) 0%, rgb(139 92 246 / 16%) 50%, rgb(255 255 255 / 0%) 100%),
     var(--surface);
-  border: 1px solid var(--accent-line);
+  border: 1px solid transparent;
+  background-clip: padding-box;
   overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgb(79 141 247 / 35%),
+    0 0 40px rgb(79 141 247 / 18%),
+    0 0 80px rgb(139 92 246 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+  animation: ai-hero-glow 4s ease-in-out infinite;
 }
 
+@keyframes ai-hero-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgb(79 141 247 / 35%),
+      0 0 40px rgb(79 141 247 / 18%),
+      0 0 80px rgb(139 92 246 / 10%),
+      inset 0 1px 0 rgb(255 255 255 / 6%);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(122 168 255 / 60%),
+      0 0 60px rgb(79 141 247 / 30%),
+      0 0 120px rgb(139 92 246 / 18%),
+      inset 0 1px 0 rgb(255 255 255 / 8%);
+  }
+}
+
+/* Animated shimmer top-edge line */
 .ai-hero::before {
   content: '';
   position: absolute;
-  top: -80px;
-  right: -80px;
-  width: 320px;
-  height: 320px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(139 92 246 / 22%) 0%, transparent 70%);
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgb(79 141 247 / 0%) 10%,
+    var(--accent-2) 40%,
+    #c084fc 60%,
+    rgb(79 141 247 / 0%) 90%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: ai-shimmer 3s linear infinite;
   pointer-events: none;
+}
+
+@keyframes ai-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }
 
 .ai-hero::after {
   content: '';
   position: absolute;
-  bottom: -120px;
-  left: -50px;
-  width: 280px;
-  height: 280px;
+  top: -80px;
+  right: -80px;
+  width: 400px;
+  height: 400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(79 141 247 / 16%) 0%, transparent 70%);
+  background: radial-gradient(circle, rgb(139 92 246 / 28%) 0%, rgb(79 141 247 / 10%) 40%, transparent 70%);
   pointer-events: none;
+  animation: ai-orb-float 6s ease-in-out infinite;
+}
+
+@keyframes ai-orb-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-20px, 20px) scale(1.08); }
 }
 
 .ai-hero-grid {
@@ -1433,6 +1487,10 @@ input.tab:focus {
   font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1.2;
+  background: linear-gradient(135deg, #fff 30%, var(--accent-2) 70%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .ai-hero p {
@@ -1452,16 +1510,25 @@ input.tab:focus {
   border: 1px solid var(--line);
   display: grid;
   gap: 0.7rem;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
 }
 
 .ai-signal-card:hover {
-  border-color: var(--accent-line);
+  border-color: rgb(79 141 247 / 50%);
+  box-shadow: 0 0 20px rgb(79 141 247 / 14%), 0 4px 16px rgb(0 0 0 / 20%);
+  transform: translateY(-1px);
 }
 
 .ai-signal-card.is-top {
-  border-color: var(--accent-line);
-  background: linear-gradient(135deg, rgb(79 141 247 / 8%), transparent 60%), var(--surface);
+  border-color: rgb(79 141 247 / 45%);
+  background: linear-gradient(135deg, rgb(79 141 247 / 10%), rgb(139 92 246 / 6%) 60%, transparent), var(--surface);
+  box-shadow: 0 0 24px rgb(79 141 247 / 16%), inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.ai-signal-card.is-top:hover {
+  border-color: rgb(122 168 255 / 70%);
+  box-shadow: 0 0 36px rgb(79 141 247 / 26%), 0 4px 24px rgb(0 0 0 / 24%);
+  transform: translateY(-2px);
 }
 
 .ai-signal-rank {
@@ -1469,10 +1536,11 @@ input.tab:focus {
   font-weight: 900;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--accent-2), #c084fc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  filter: drop-shadow(0 0 8px rgb(79 141 247 / 40%));
 }
 
 .ai-signal-delta {
@@ -1486,7 +1554,8 @@ input.tab:focus {
   font-size: 0.74rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  border: 1px solid rgb(34 197 94 / 28%);
+  border: 1px solid rgb(34 197 94 / 35%);
+  box-shadow: 0 0 10px rgb(34 197 94 / 18%);
 }
 
 .ai-signal-delta::before {
@@ -1504,16 +1573,24 @@ input.tab:focus {
 
 .ai-confidence-bar {
   flex: 1;
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 5%);
+  background: rgb(255 255 255 / 6%);
   overflow: hidden;
 }
 
 .ai-confidence-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), #8b5cf6);
+  background: linear-gradient(90deg, var(--accent), #8b5cf6, #c084fc);
+  box-shadow: 0 0 8px rgb(79 141 247 / 60%);
+  animation: ai-bar-grow 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+  transform-origin: left;
+}
+
+@keyframes ai-bar-grow {
+  from { transform: scaleX(0); opacity: 0; }
+  to   { transform: scaleX(1); opacity: 1; }
 }
 
 /* Mini AI sparkline (stylised dots) */
@@ -1534,7 +1611,7 @@ input.tab:focus {
 
 .ai-sparkline span:last-child {
   opacity: 1;
-  box-shadow: 0 0 10px rgb(79 141 247 / 65%);
+  box-shadow: 0 0 12px rgb(79 141 247 / 80%);
 }
 
 /* ==========================================================================
@@ -2001,6 +2078,208 @@ input.tab:focus {
   to   { transform: rotate(360deg); }
 }
 .spin { animation: spin 0.7s linear infinite; display: inline-block; }
+
+/* ==========================================================================
+   AI Feature Animations & Components
+   ========================================================================== */
+
+/* AI scanning pulse */
+@keyframes ai-scan {
+  0%, 100% { opacity: 1; transform: scaleX(1); }
+  50%       { opacity: 0.6; transform: scaleX(0.96); }
+}
+
+/* Shimmer sweep */
+@keyframes ai-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Slide up fade in */
+@keyframes ai-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Fade out slide down */
+@keyframes ai-slide-down {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(8px); }
+}
+
+/* Brain icon float */
+@keyframes ai-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-3px); }
+}
+
+/* Dot blink for scanning state */
+@keyframes ai-blink {
+  0%, 80%, 100% { opacity: 0; }
+  40%            { opacity: 1; }
+}
+
+/* ── AI Moderation Toast ─────────────────────────────────────────── */
+.ai-moderation-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  font-weight: 500;
+  animation: ai-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.3s ease;
+}
+
+.ai-moderation-toast.scanning {
+  background: rgba(79, 141, 247, 0.08);
+  border: 1px solid rgba(79, 141, 247, 0.25);
+  color: var(--accent-2);
+}
+
+.ai-moderation-toast.approved {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: #4ade80;
+}
+
+.ai-moderation-toast.reviewing {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+}
+
+.ai-moderation-toast-icon {
+  font-size: 1.1rem;
+  animation: ai-float 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.ai-scan-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.ai-scan-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ai-blink 1.2s ease-in-out infinite;
+}
+
+.ai-scan-dots span:nth-child(2) { animation-delay: 0.2s; }
+.ai-scan-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── Sentiment Inline Badge ──────────────────────────────────────── */
+.ai-sentiment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform 0.15s ease;
+}
+
+.ai-sentiment-pill:hover {
+  transform: scale(1.05);
+}
+
+.ai-sentiment-pill.positive {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.ai-sentiment-pill.negative {
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  color: #fb923c;
+}
+
+.ai-sentiment-pill.neutral {
+  background: rgba(107, 114, 128, 0.12);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+  color: #9ca3af;
+}
+
+.ai-sentiment-pill.toxic {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.ai-intent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.ai-intent-chip:hover { opacity: 1; }
+
+/* ── Hotness Breakdown Panel ─────────────────────────────────────── */
+.hotness-breakdown {
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.25s ease;
+}
+
+.hotness-breakdown.open {
+  animation: ai-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hotness-signal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.73rem;
+}
+
+.hotness-signal-bar-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.hotness-signal-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hotness-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: inherit;
+}
+
+.hotness-toggle-btn:hover { color: var(--accent-2); }
+
 
 /* hide crawler meta junk */
 .article-prose meta,

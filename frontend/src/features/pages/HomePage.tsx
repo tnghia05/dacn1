@@ -1,8 +1,15 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiRequest } from '../../shared/api/client'
-import type { HotTopicsResponse, EntityTrendsResponse } from '../../shared/api/types'
-import { IMG, mockCommunityPosts, mockMatches, mockNews } from '../../shared/data/mock'
+import type { 
+  HotTopicsResponse, 
+  EntityTrendsResponse, 
+  MatchItem, 
+  NewsItem, 
+  Post, 
+  PaginatedResponse 
+} from '../../shared/api/types'
+import { IMG } from '../../shared/data/mock'
 import { AITag, Badge, Btn, ReactionBar, SectionHeader } from '../../shared/components/Ui'
 
 type AiCard = {
@@ -14,11 +21,44 @@ type AiCard = {
   sentimentColor?: string
 }
 
-export function HomePage() {
-  const featured = mockNews[0]
-  const otherNews = mockNews.slice(1, 4)
-  const communityPreview = mockCommunityPosts[0]
+function formatTime(iso?: string) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
+}
 
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const h = Math.floor(diff / 3_600_000)
+  if (h < 1) return 'Vừa xong'
+  if (h < 24) return `${h} giờ trước`
+  return `${Math.floor(h / 24)} ngày trước`
+}
+
+function TeamLogo({ team }: { team?: { imageUrl?: string; acronym?: string; name?: string } }) {
+  if (!team) return <span className="team-logo">TB</span>
+  if (team.imageUrl) {
+    return (
+      <img
+        src={team.imageUrl}
+        alt={team.acronym ?? team.name}
+        style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0 }}
+        onError={(e) => { 
+          (e.currentTarget as HTMLImageElement).style.display = 'none' 
+        }}
+      />
+    )
+  }
+  return <span className="team-logo">{(team.acronym ?? team.name ?? 'TBD').slice(0, 2).toUpperCase()}</span>
+}
+
+const GAME_LABELS: Record<string, string> = {
+  lol: 'LoL', csgo: 'CS2', dota2: 'Dota 2', valorant: 'Valorant',
+  ow2: 'OW2', rl: 'RL', mlbb: 'MLBB', kog: 'KoG', r6: 'R6', cod: 'CoD',
+}
+
+export function HomePage() {
+  // 1. Fetch AI Trends
   const { data: hotTopics } = useQuery({
     queryKey: ['home-hot-topics'],
     queryFn: () => apiRequest<HotTopicsResponse>('/hashtags/hot-topics?window=24h&limit=1'),
@@ -31,7 +71,33 @@ export function HomePage() {
     staleTime: 5 * 60_000,
   })
 
-  // Build 3 cards: top topic + top team + top player
+  // 2. Fetch real Matches
+  const { data: matchesData, isLoading: matchesLoading } = useQuery({
+    queryKey: ['home-matches'],
+    queryFn: () => apiRequest<PaginatedResponse<MatchItem>>('/matches?limit=4&tab=all'),
+    staleTime: 60_000,
+  })
+  const matches = matchesData?.items ?? []
+
+  // 3. Fetch real News
+  const { data: newsData, isLoading: newsLoading } = useQuery({
+    queryKey: ['home-news'],
+    queryFn: () => apiRequest<PaginatedResponse<NewsItem>>('/news?limit=4'),
+    staleTime: 2 * 60_000,
+  })
+  const newsItems = newsData?.items ?? []
+  const featured = newsItems[0]
+  const otherNews = newsItems.slice(1, 4)
+
+  // 4. Fetch real Community post
+  const { data: communityData } = useQuery({
+    queryKey: ['home-community-posts'],
+    queryFn: () => apiRequest<PaginatedResponse<Post>>('/posts?tab=hot&limit=1'),
+    staleTime: 60_000,
+  })
+  const communityPreview = communityData?.items?.[0]
+
+  // Build AI Predict cards
   const topTopic = hotTopics?.items?.[0]
   const topTeam = entityTrends?.items?.find((e) => e.type === 'TEAM')
   const topPlayer = entityTrends?.items?.find((e) => e.type === 'PLAYER')
@@ -185,36 +251,57 @@ export function HomePage() {
             </Link>
           }
         />
-        <div className="live-strip">
-          {mockMatches.map((m) => (
-            <Link key={m.id} to="/matches/detail" className="live-card">
-              <div className="live-card-head">
-                <span className="live-card-league">{m.league}</span>
-                {m.status === 'live' ? (
-                  <Badge tone="live">LIVE</Badge>
-                ) : m.status === 'upcoming' ? (
-                  <Badge tone="warn">Sắp đấu</Badge>
-                ) : (
-                  <Badge tone="default">Đã kết thúc</Badge>
-                )}
-              </div>
-              <div className="live-card-teams">
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span className="team-logo">{m.teamA.logo}</span>
-                  {m.teamA.name}
-                </span>
-                <span className="live-card-score">
-                  {m.teamA.score} : {m.teamB.score}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                  {m.teamB.name}
-                  <span className="team-logo">{m.teamB.logo}</span>
-                </span>
-              </div>
-              <p className="live-card-meta">{m.time}</p>
-            </Link>
-          ))}
-        </div>
+        {matchesLoading && (
+          <div className="live-strip">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="live-card" style={{ opacity: 0.35, pointerEvents: 'none', height: 110 }} />
+            ))}
+          </div>
+        )}
+        {!matchesLoading && (
+          <div className="live-strip">
+            {matches.map((m) => {
+              const [tA, tB] = m.teams ?? []
+              return (
+                <Link key={m._id} to={`/matches/${m._id}`} className="live-card">
+                  <div className="live-card-head">
+                    <span className="live-card-league" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                      {m.leagueName ?? m.serieName ?? 'Esports'}
+                    </span>
+                    {m.status === 'live' ? (
+                      <Badge tone="live">LIVE</Badge>
+                    ) : m.status === 'not_started' ? (
+                      <Badge tone="warn">Sắp đấu</Badge>
+                    ) : (
+                      <Badge tone="default">Đã kết thúc</Badge>
+                    )}
+                  </div>
+                  <div className="live-card-teams">
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <TeamLogo team={tA} />
+                      {tA?.acronym ?? tA?.name ?? 'TBD'}
+                    </span>
+                    <span className="live-card-score" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {m.status === 'not_started' ? 'vs' : `${tA?.score ?? 0} : ${tB?.score ?? 0}`}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {tB?.acronym ?? tB?.name ?? 'TBD'}
+                      <TeamLogo team={tB} />
+                    </span>
+                  </div>
+                  <p className="live-card-meta">
+                    {formatTime(m.startsAt)}
+                    {m.numberOfGames ? ` · BO${m.numberOfGames}` : ''}
+                    {m.game ? ` · ${GAME_LABELS[m.game] ?? m.game.toUpperCase()}` : ''}
+                  </p>
+                </Link>
+              )
+            })}
+            {matches.length === 0 && (
+              <p style={{ color: 'var(--muted)', padding: '1rem 0' }}>Chưa có trận nào diễn ra.</p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Featured news */}
@@ -227,28 +314,42 @@ export function HomePage() {
             </Link>
           }
         />
-        <Link to="/news/detail" className="news-feature" style={{ color: 'inherit' }}>
-          <div className="news-feature-img" style={{ backgroundImage: `url(${featured.image})` }} />
-          <div className="news-feature-body">
-            <Badge tone="warn">{featured.game}</Badge>
-            <h3>{featured.title}</h3>
-            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.92rem', lineHeight: 1.6 }}>{featured.excerpt}</p>
-            <p className="news-meta">{featured.date} · {featured.category}</p>
+        {newsLoading && (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <div className="news-feature" style={{ opacity: 0.35, height: 260 }} />
           </div>
-        </Link>
+        )}
+        {!newsLoading && (
+          <>
+            {featured && (
+              <Link to={`/news/${featured._id}`} className="news-feature" style={{ color: 'inherit' }}>
+                <div className="news-feature-img" style={{ backgroundImage: `url(${featured.coverImageUrl || featured.thumbnailUrl || featured.imageUrl || IMG.heroHome})` }} />
+                <div className="news-feature-body">
+                  {featured.game && <Badge tone="warn">{featured.game.toUpperCase()}</Badge>}
+                  <h3>{featured.title}</h3>
+                  {featured.excerpt && <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.92rem', lineHeight: 1.6 }}>{featured.excerpt}</p>}
+                  <p className="news-meta">{timeAgo(featured.createdAt)}{featured.source ? ` · ${featured.source}` : ''}</p>
+                </div>
+              </Link>
+            )}
 
-        <div className="news-grid">
-          {otherNews.map((n) => (
-            <Link key={n.id} to="/news/detail" className="news-card">
-              <div className="news-card-img" style={{ backgroundImage: `url(${n.image})` }} />
-              <div className="news-card-body">
-                <Badge tone="default">{n.game}</Badge>
-                <h4>{n.title}</h4>
-                <span className="news-meta">{n.date}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
+            <div className="news-grid">
+              {otherNews.map((n) => (
+                <Link key={n._id} to={`/news/${n._id}`} className="news-card">
+                  <div className="news-card-img" style={{ backgroundImage: `url(${n.coverImageUrl || n.thumbnailUrl || n.imageUrl || IMG.heroHome})` }} />
+                  <div className="news-card-body">
+                    {n.game && <Badge tone="default">{n.game.toUpperCase()}</Badge>}
+                    <h4>{n.title}</h4>
+                    <span className="news-meta">{timeAgo(n.createdAt)}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            {newsItems.length === 0 && (
+              <p style={{ color: 'var(--muted)', padding: '1rem 0' }}>Chưa có tin tức nào được đăng tải.</p>
+            )}
+          </>
+        )}
       </section>
 
       {/* Community quote */}
@@ -262,18 +363,20 @@ export function HomePage() {
               </Link>
             }
           />
-          <Link to="/community/post" className="surface-card" style={{ color: 'inherit', display: 'block' }}>
+          <Link to={`/community/${communityPreview._id}`} className="surface-card" style={{ color: 'inherit', display: 'block' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
               <strong style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.01em' }}>{communityPreview.title}</strong>
-              <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>@{communityPreview.author}</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>@{communityPreview.author?.displayName ?? 'Anonymous'}</span>
             </div>
-            <p style={{ margin: '0.55rem 0 0', color: 'var(--muted)', fontSize: '0.92rem', lineHeight: 1.55 }}>
-              {communityPreview.excerpt}
-            </p>
+            {communityPreview.content && (
+              <p style={{ margin: '0.55rem 0 0', color: 'var(--muted)', fontSize: '0.92rem', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {communityPreview.content}
+              </p>
+            )}
             <div style={{ marginTop: '0.85rem', display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <ReactionBar compact seed={2} />
               <span style={{ fontSize: '0.78rem', color: 'var(--muted-2)' }}>
-                {communityPreview.replies} bình luận · {communityPreview.votes} vote
+                {communityPreview.commentCount ?? 0} bình luận · {communityPreview.likeCount ?? 0} lượt thích
               </span>
             </div>
           </Link>

@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiRequest } from '../../shared/api/client'
 import type { AiModerationStat, Sentiment4Distribution, ToxicByGame, AdminAlert } from '../../shared/api/types'
-import { AITag, ChartBars, SectionHeader } from '../../shared/components/Ui'
+import { AITag, ChartBars, SectionHeader, Btn, Badge } from '../../shared/components/Ui'
 
 const SENT_COLOR: Record<string, string> = {
   positive: '#22c55e',
@@ -12,6 +13,11 @@ const SENT_COLOR: Record<string, string> = {
 
 export function AdminAnalyticsPage() {
   const qc = useQueryClient()
+  const [testText, setTestText] = useState('')
+
+  const { mutate: runTest, data: testResult, isPending: testPending, error: testError } = useMutation({
+    mutationFn: (text: string) => apiRequest<any>('/admin/ai/test', { method: 'POST', body: { text } }),
+  })
 
   const { data: statsRaw } = useQuery({
     queryKey: ['admin-ai-stats'],
@@ -200,6 +206,185 @@ export function AdminAnalyticsPage() {
           )}
         </div>
       </div>
+
+      {/* AI Moderation Sandbox */}
+      <section className="surface-card" style={{ marginTop: '2rem' }}>
+        <SectionHeader
+          title="AI Moderation Sandbox & Playground"
+          subtitle="Chạy thử nghiệm mô hình PhoBERT đa nhiệm để chẩn đoán & tinh chỉnh luật kiểm duyệt tự động"
+          action={<AITag>LIVE PROBE</AITag>}
+        />
+
+        <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '1fr', marginTop: '1.25rem' }}>
+          <div>
+            <div className="field" style={{ marginBottom: '1rem' }}>
+              <label htmlFor="sandbox-text" style={{ fontSize: '0.86rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>Nội dung bình luận mẫu</label>
+              <textarea
+                id="sandbox-text"
+                rows={3}
+                placeholder="Nhập nội dung bình luận tiếng Việt để PhoBERT phân tích (ví dụ: SofM phân tích chiến thuật meta đỉnh quá, cơ mà mấy ông caster GAM bình luận hơi chán...)"
+                value={testText}
+                onChange={(e) => setTestText(e.target.value)}
+                style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.92rem', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <Btn
+                onClick={() => testText.trim() && runTest(testText.trim())}
+                disabled={testPending || !testText.trim()}
+              >
+                {testPending ? 'Đang phân tích...' : '✦ Phân tích bằng PhoBERT'}
+              </Btn>
+              {testResult && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTestText('')
+                    runTest('')
+                  }}
+                  style={{ background: 'none', border: '1px solid var(--line)', borderRadius: '8px', padding: '0.4rem 0.85rem', color: 'var(--muted)', fontSize: '0.84rem', cursor: 'pointer' }}
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
+          </div>
+
+          {testError && (
+            <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', color: '#f87171', fontSize: '0.88rem' }}>
+              Không thể kết nối đến dịch vụ AI. Vui lòng kiểm tra lại AI_MODERATION_URL.
+            </div>
+          )}
+
+          {testResult && !testResult.error && (
+            <div className="ai-panel" style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', padding: '1.25rem', border: '1px solid var(--accent-line)', background: 'linear-gradient(135deg, var(--surface) 0%, rgba(139,92,246,0.03) 100%)', borderRadius: 'var(--r-lg)' }}>
+              
+              {/* Cột 1: Quyết định kiểm duyệt và NER */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--muted)' }}>Quyết định kiểm duyệt</h4>
+                  {testResult.toxicity?.isToxic ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', color: '#ef4444', fontWeight: 700, fontSize: '0.95rem' }}>
+                      <span>❌ AUTO-REJECT</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--muted)', marginLeft: 'auto' }}>Toxic: {Math.round(testResult.toxicity.score * 100)}%</span>
+                    </div>
+                  ) : testResult.confidence != null && testResult.confidence < 0.65 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '8px', color: '#f97316', fontWeight: 700, fontSize: '0.95rem' }}>
+                      <span>⚠️ ESCALATE MANUAL REVIEW</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--muted)', marginLeft: 'auto' }}>Conf: {Math.round(testResult.confidence * 100)}%</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', color: '#22c55e', fontWeight: 700, fontSize: '0.95rem' }}>
+                      <span>✅ AUTO-APPROVE</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--muted)', marginLeft: 'auto' }}>Độ tin cậy: {Math.round((testResult.confidence ?? 1) * 100)}%</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--muted)' }}>Thực thể trích xuất (NER)</h4>
+                  {(!testResult.entities || testResult.entities.length === 0) ? (
+                    <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--muted)' }}>Không phát hiện thực thể nào trong câu mẫu.</p>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {testResult.entities.map((ent: any, idx: number) => {
+                        let tone: 'default' | 'live' | 'warn' = 'default'
+                        if (ent.type === 'PLAYER') tone = 'live'
+                        if (ent.type === 'TEAM') tone = 'warn'
+                        return (
+                          <Badge key={idx} tone={tone}>
+                            {ent.text} ({ent.type})
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--muted)' }}>Thông tin Mô hình</h4>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.5 }}>
+                    Mô hình: <code style={{ color: 'var(--accent)' }}>vinai/phobert-base</code><br />
+                    Tác vụ: <code>Sentiment4 + Intent + Aspect + NER</code><br />
+                    Phiên bản AI: <code>{testResult.aiVersion ?? 'PhoBERT-Multitask-v1.0'}</code>
+                  </p>
+                </div>
+              </div>
+
+              {/* Cột 2: Cảm xúc 4 lớp & Mục đích */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--muted)' }}>Xác suất Sentiment4</h4>
+                  <div style={{ display: 'grid', gap: '0.4rem' }}>
+                    {Object.entries(testResult.sentiment4Scores ?? {}).map(([label, val]: any) => (
+                      <div key={label}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.15rem' }}>
+                          <span style={{ color: SENT_COLOR[label] ?? 'inherit', fontWeight: 600 }}>{label}</span>
+                          <span style={{ color: 'var(--muted)' }}>{Math.round(val * 100)}%</span>
+                        </div>
+                        <div style={{ height: 5, background: 'var(--surface)', borderRadius: 2.5, overflow: 'hidden' }}>
+                          <div style={{ width: `${val * 100}%`, height: '100%', background: SENT_COLOR[label] ?? '#6b7280', borderRadius: 2.5 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: 'var(--muted)' }}>Xác suất Intent</h4>
+                  <div style={{ display: 'grid', gap: '0.4rem' }}>
+                    {Object.entries(testResult.intentScores ?? {}).map(([label, val]: any) => (
+                      <div key={label}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.15rem' }}>
+                          <span style={{ fontWeight: 600, color: label === 'praise' ? '#22c55e' : label === 'complain' ? '#f97316' : label === 'question' ? '#3b82f6' : 'var(--text)' }}>
+                            {label === 'praise' ? 'khen ngợi (praise)' : label === 'complain' ? 'góp ý (complain)' : label === 'question' ? 'hỏi đáp (question)' : 'khác (other)'}
+                          </span>
+                          <span style={{ color: 'var(--muted)' }}>{Math.round(val * 100)}%</span>
+                        </div>
+                        <div style={{ height: 5, background: 'var(--surface)', borderRadius: 2.5, overflow: 'hidden' }}>
+                          <div style={{ width: `${val * 100}%`, height: '100%', background: label === 'praise' ? '#22c55e' : label === 'complain' ? '#f97316' : label === 'question' ? '#3b82f6' : '#6b7280', borderRadius: 2.5 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cột 3: Khía cạnh Aspects */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--muted)' }}>Khía cạnh thảo luận (Aspects)</h4>
+                <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--muted-2)' }}>Khía cạnh có xác suất vượt ngưỡng sẽ được kích hoạt</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                  {['caster', 'meta', 'player_team', 'tournament', 'result', 'general'].map((aspect) => {
+                    const isMatched = testResult.aspects?.includes(aspect)
+                    const score = testResult.aspectScores?.[aspect] ?? 0
+                    return (
+                      <div
+                        key={aspect}
+                        style={{
+                          padding: '0.45rem',
+                          borderRadius: '6px',
+                          border: `1px solid ${isMatched ? 'rgba(139,92,246,0.3)' : 'var(--line)'}`,
+                          background: isMatched ? 'rgba(139,92,246,0.08)' : 'rgba(255,255,255,0.01)',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: isMatched ? 'var(--accent-2)' : 'var(--muted)' }}>
+                          {aspect.toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: isMatched ? '#c084fc' : 'var(--muted-2)' }}>
+                          Score: {Math.round(score * 100)}%
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   )
 }

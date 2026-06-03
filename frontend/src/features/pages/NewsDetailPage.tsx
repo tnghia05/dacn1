@@ -15,12 +15,63 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)} ngày trước`
 }
 
+function highlightEntities(content: string, entities?: { text: string; type: string }[]) {
+  if (!entities || entities.length === 0) return <span>{content}</span>
+
+  const escapedEntities = entities
+    .map(e => e.text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+    .filter(Boolean)
+
+  if (escapedEntities.length === 0) return <span>{content}</span>
+
+  const regex = new RegExp(`(${escapedEntities.join('|')})`, 'gi')
+  const parts = content.split(regex)
+
+  return (
+    <>
+      {parts.map((part, idx) => {
+        const matchingEntity = entities.find(
+          e => e.text.toLowerCase() === part.toLowerCase()
+        )
+        if (matchingEntity) {
+          let toneColor = 'var(--accent-2)' // PLAYER
+          if (matchingEntity.type === 'TEAM') toneColor = '#3b82f6'
+          if (matchingEntity.type === 'TOURNAMENT') toneColor = '#fbbf24'
+
+          return (
+            <span
+              key={idx}
+              title={`Thực thể AI: ${matchingEntity.type}`}
+              style={{
+                borderBottom: `2px dashed ${toneColor}`,
+                color: toneColor,
+                fontWeight: 600,
+                cursor: 'help',
+                padding: '0 2px',
+                borderRadius: '2px',
+                background: 'rgba(255, 255, 255, 0.02)',
+              }}
+            >
+              {part}
+            </span>
+          )
+        }
+        return part
+      })}
+    </>
+  )
+}
+
 export function NewsDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, user } = useAuth()
   const qc = useQueryClient()
   const [commentText, setCommentText] = useState('')
   const [commentError, setCommentError] = useState('')
+  const [showAiInsights, setShowAiInsights] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const [editError, setEditError] = useState('')
 
   const { data: article, isLoading, isError } = useQuery({
     queryKey: ['news', id],
@@ -39,11 +90,35 @@ export function NewsDetailPage() {
       apiRequest<Comment>(`/news/${id}/comments`, { method: 'POST', body: { content } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['news-comments', id] })
+      qc.invalidateQueries({ queryKey: ['news', id] })
       setCommentText('')
       setCommentError('')
     },
     onError: (err) => {
       setCommentError(err instanceof ApiError ? err.message : 'Gửi bình luận thất bại.')
+    },
+  })
+
+  const deleteComment = useMutation({
+    mutationFn: (commentId: string) => apiRequest<{ ok: boolean }>(`/comments/${commentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['news-comments', id] })
+      qc.invalidateQueries({ queryKey: ['news', id] })
+    },
+  })
+
+  const editComment = useMutation({
+    mutationFn: ({ commentId, content }: { commentId: string; content: string }) =>
+      apiRequest<Comment>(`/comments/${commentId}`, { method: 'PATCH', body: { content } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['news-comments', id] })
+      qc.invalidateQueries({ queryKey: ['news', id] })
+      setEditingCommentId(null)
+      setEditingText('')
+      setEditError('')
+    },
+    onError: (err) => {
+      setEditError(err instanceof ApiError ? err.message : 'Sửa bình luận thất bại.')
     },
   })
 
@@ -142,7 +217,31 @@ export function NewsDetailPage() {
 
         {/* Comments */}
         <section>
-          <SectionHeader title={`Bình luận (${commentsData?.total ?? 0})`} />
+          <SectionHeader
+            title={`Bình luận (${commentsData?.total ?? 0})`}
+            action={
+              <button
+                type="button"
+                onClick={() => setShowAiInsights(!showAiInsights)}
+                style={{
+                  background: showAiInsights ? 'var(--accent-soft)' : 'none',
+                  border: `1px solid ${showAiInsights ? 'var(--accent-line)' : 'var(--line)'}`,
+                  borderRadius: '8px',
+                  padding: '0.4rem 0.85rem',
+                  color: showAiInsights ? 'var(--accent-2)' : 'var(--muted)',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                ✦ {showAiInsights ? 'Ẩn nhãn AI' : 'Xem nhãn AI'}
+              </button>
+            }
+          />
 
           {isLoggedIn ? (
             <form onSubmit={onPostComment} className="surface-card" style={{ marginTop: '0.85rem' }}>
@@ -169,11 +268,182 @@ export function NewsDetailPage() {
           <div className="comment-thread" style={{ marginTop: '1rem' }}>
             {comments.map((c) => (
               <div key={c._id} className="comment-item">
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                  <strong style={{ fontSize: '0.9rem' }}>@{c.author?.displayName ?? c.authorId.slice(-6)}</strong>
-                  <span style={{ fontSize: '0.74rem', color: 'var(--muted-2)' }}>{timeAgo(c.createdAt)}</span>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '0.9rem' }}>@{c.author?.displayName ?? c.authorId.slice(-6)}</strong>
+                    {c.sentiment4 && (
+                      <span
+                        title={`Cảm xúc: ${c.sentiment4}`}
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          display: 'inline-block',
+                          background:
+                            c.sentiment4 === 'toxic' || c.toxicity?.isToxic
+                              ? '#ef4444'
+                              : c.sentiment4 === 'positive'
+                              ? '#22c55e'
+                              : c.sentiment4 === 'negative'
+                              ? '#f97316'
+                              : '#6b7280',
+                          boxShadow:
+                            c.sentiment4 === 'toxic' || c.toxicity?.isToxic
+                              ? '0 0 6px #ef4444'
+                              : c.sentiment4 === 'positive'
+                              ? '0 0 6px #22c55e'
+                              : c.sentiment4 === 'negative'
+                              ? '0 0 6px #f97316'
+                              : 'none',
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', fontSize: '0.74rem' }}>
+                    <span style={{ color: 'var(--muted-2)' }}>{timeAgo(c.createdAt)}</span>
+                    {(c.authorId === user?.id || user?.role === 'admin') && editingCommentId !== c._id && (
+                      <>
+                        <span style={{ color: 'var(--line)' }}>|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCommentId(c._id)
+                            setEditingText(c.content)
+                            setEditError('')
+                          }}
+                          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-2)', cursor: 'pointer', fontSize: '0.74rem' }}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('Bạn có chắc chắn muốn xóa bình luận này?')) {
+                              deleteComment.mutate(c._id)
+                            }
+                          }}
+                          style={{ background: 'none', border: 'none', padding: 0, color: '#f87171', cursor: 'pointer', fontSize: '0.74rem' }}
+                        >
+                          Xóa
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p style={{ margin: '0.35rem 0 0', color: '#d6d9e0', fontSize: '0.92rem', lineHeight: 1.55 }}>{c.content}</p>
+                {editingCommentId === c._id ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      if (!editingText.trim()) return
+                      editComment.mutate({ commentId: c._id, content: editingText.trim() })
+                    }}
+                    style={{ marginTop: '0.5rem', display: 'grid', gap: '0.5rem' }}
+                  >
+                    {editError && <p style={{ margin: '0', color: '#f87171', fontSize: '0.8rem' }}>{editError}</p>}
+                    <textarea
+                      rows={2}
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: 'var(--surface-dark)',
+                        border: '1px solid var(--line)',
+                        borderRadius: '6px',
+                        padding: '0.4rem 0.6rem',
+                        color: '#fff',
+                        fontSize: '0.9rem',
+                        lineHeight: 1.6,
+                        outline: 'none',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCommentId(null)
+                          setEditingText('')
+                          setEditError('')
+                        }}
+                        style={{
+                          background: 'none',
+                          border: '1px solid var(--line)',
+                          borderRadius: '6px',
+                          padding: '0.25rem 0.6rem',
+                          color: 'var(--muted)',
+                          fontSize: '0.78rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={editComment.isPending}
+                        style={{
+                          background: 'var(--accent)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '0.25rem 0.6rem',
+                          color: '#fff',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {editComment.isPending ? 'Đang lưu…' : 'Lưu'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p style={{ margin: '0.4rem 0 0', color: '#d6d9e0', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    {highlightEntities(c.content, c.aiEntities)}
+                  </p>
+                )}
+                {showAiInsights && (
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem', paddingLeft: '0.2rem' }}>
+                    {c.intent && c.intent !== 'other' && (
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '4px',
+                          border: '1px solid currentColor',
+                          color:
+                            c.intent === 'praise'
+                              ? '#22c55e'
+                              : c.intent === 'complain'
+                              ? '#f97316'
+                              : '#3b82f6',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                        }}
+                      >
+                        🎯 {c.intent === 'praise' ? 'Khen ngợi' : c.intent === 'complain' ? 'Than phiền' : 'Hỏi đáp'}
+                      </span>
+                    )}
+                    {c.aspects?.map((aspect) => (
+                      <span
+                        key={aspect}
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '4px',
+                          background: 'rgba(139,92,246,0.08)',
+                          border: '1px solid rgba(139,92,246,0.2)',
+                          color: '#c084fc',
+                        }}
+                      >
+                        🏷️ {aspect.toUpperCase()}
+                      </span>
+                    ))}
+                    {c.confidence != null && (
+                      <span style={{ fontSize: '0.7rem', color: 'var(--muted-2)', marginLeft: 'auto', alignSelf: 'center' }}>
+                        độ tin cậy: {Math.round(c.confidence * 100)}%
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {comments.length === 0 && !isLoading && (

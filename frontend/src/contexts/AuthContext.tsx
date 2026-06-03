@@ -12,6 +12,7 @@ type AuthContextValue = {
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
   setUser: (user: User) => void
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -61,6 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user)
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const u = await apiRequest<User>('/me')
+      setUser(u)
+    } catch {
+      // ignore
+    }
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await apiRequest('/auth/logout', { method: 'POST' })
@@ -73,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoggedIn: !!user, isLoading, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{ user, token, isLoggedIn: !!user, isLoading, login, register, logout, setUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

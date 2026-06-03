@@ -13,6 +13,7 @@ const mainNav = [
   { to: '/tournaments', label: 'Giải đấu' },
   { to: '/community', label: 'Cộng đồng' },
   { to: '/store', label: 'Cửa hàng' },
+  { to: '/vip', label: 'Premium 👑' },
 ]
 
 export function SiteLayout() {
@@ -84,6 +85,9 @@ export function SiteLayout() {
           </NavLink>
           {isLoggedIn ? (
             <>
+              <NavLink to="/points" className="utility-link icon-link" aria-label="Điểm tích lũy" title="Điểm tích lũy" style={{ fontSize: '0.8rem', color: 'var(--accent-2)', fontVariantNumeric: 'tabular-nums' }}>
+                🏆 {(user?.points ?? 0).toLocaleString('vi-VN')}
+              </NavLink>
               <NavLink to="/profile" className="utility-link" aria-label="Hồ sơ">
                 {user?.displayName ?? 'Hồ sơ'}
               </NavLink>
@@ -155,6 +159,10 @@ export function SiteLayout() {
             <br />
             <NavLink className="link-inline" to="/profile/orders">
               Đơn hàng
+            </NavLink>
+            <br />
+            <NavLink className="link-inline" to="/points">
+              Điểm tích lũy
             </NavLink>
             <br />
             <NavLink className="link-inline" to="/profile/settings">

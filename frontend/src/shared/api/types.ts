@@ -6,6 +6,49 @@ export type User = {
   displayName: string
   role: UserRole
   avatarUrl?: string
+  points?: number
+}
+
+export type PointReason =
+  | 'checkin'
+  | 'post_publish'
+  | 'comment_create'
+  | 'prediction_win'
+  | 'prediction_bet'
+  | 'redeem_product'
+  | 'checkout_discount'
+  | 'admin_adjust'
+
+export type PointLedgerEntry = {
+  _id: string
+  userId: string
+  delta: number
+  balanceAfter: number
+  reason: PointReason
+  meta?: Record<string, unknown>
+  createdAt: string
+}
+
+export type PointsBalance = {
+  balance: number
+  items: PointLedgerEntry[]
+  total: number
+}
+
+export type PredictionStatus = 'pending' | 'won' | 'lost' | 'cancelled'
+
+export type Prediction = {
+  _id: string
+  userId: string
+  matchId: string
+  teamIndex: number
+  teamName: string
+  pointsBet: number
+  oddsAtBet: number
+  status: PredictionStatus
+  pointsWon?: number
+  settledAt?: string
+  createdAt: string
 }
 
 export type AuthResponse = {
@@ -49,6 +92,15 @@ export type Comment = {
   likedByMe?: boolean
   replyCount?: number
   createdAt: string
+
+  // AI fields from backend
+  sentiment?: 'positive' | 'neutral' | 'negative'
+  sentiment4?: 'positive' | 'negative' | 'neutral' | 'toxic'
+  intent?: 'praise' | 'complain' | 'question' | 'other'
+  aspects?: ('caster' | 'meta' | 'player_team' | 'tournament' | 'result' | 'general')[]
+  aiEntities?: { text: string; type: string }[]
+  toxicity?: { isToxic: boolean; score: number }
+  confidence?: number
 }
 
 /** Response từ GET /hashtags/hot-topics */
@@ -119,14 +171,19 @@ export type ProductVariant = {
 export type Product = {
   _id: string
   name: string
+  slug?: string
   description?: string
   price: number
-  imageUrl?: string
-  images?: string[]
-  game?: string
+  imageUrls?: string[]   // backend field name
+  /** @deprecated use imageUrls[0] */ imageUrl?: string
+  /** @deprecated use imageUrls      */ images?: string[]
   stock?: number
-  badge?: string | null
+  reserved?: number
+  type?: 'physical' | 'digital' | 'ticket' | 'service'
+  status?: 'active' | 'inactive'
+  tags?: string[]
   variants?: ProductVariant[]
+  pointsPrice?: number
   createdAt?: string
 }
 
@@ -203,9 +260,18 @@ export type LoLEsportsGame = {
   state: 'completed' | 'inProgress' | 'unstarted'
 }
 
+export type TimelinePoint = {
+  minute: number
+  blueGold: number
+  redGold: number
+  diff: number
+}
+
 export type LoLEsportsStream = {
   youtube: { videoId: string; locale: string; statsEnabled: boolean } | null
   twitch: { channel: string; locale: string; statsEnabled: boolean } | null
+  lpl: { url: string; locale: string } | null
+  bilibili: { url: string; locale: string } | null
 }
 
 export type LoLEsportsEvent = {
@@ -387,3 +453,139 @@ export type MatchItem = {
   provider?: string
   syncedAt: string
 }
+
+// ── PandaScore Leagues / Series / Tournaments ─────────────────────────────────
+export type PandaScoreVideogame = { id: number; name: string; slug: string }
+
+export type PandaScoreLeague = {
+  id: number
+  name: string
+  slug: string
+  url?: string
+  image_url?: string
+  videogame?: PandaScoreVideogame
+}
+
+export type PandaScoreTournamentRef = {
+  id: number
+  name: string
+  slug: string
+  begin_at?: string
+  end_at?: string
+  prizepool?: string
+  tier?: string
+}
+
+export type PandaScoreSerie = {
+  id: number
+  name?: string
+  full_name: string
+  slug: string
+  begin_at?: string | null
+  end_at?: string | null
+  year?: number
+  season?: string
+  league?: { id: number; name: string; slug: string; image_url?: string }
+  league_id?: number
+  videogame?: PandaScoreVideogame
+  tournaments?: PandaScoreTournamentRef[]
+}
+
+export type PandaScoreTeamRef = {
+  id: number
+  name: string
+  acronym?: string
+  image_url?: string
+  location?: string
+  players?: PandaScorePlayer[]
+}
+
+
+export type PandaScoreStanding = {
+  rank: number
+  team: PandaScoreTeamRef
+  wins: number
+  losses: number
+  draws: number
+  total: number
+}
+
+export type PandaScoreSerieOpponent = {
+  opponent: PandaScoreTeamRef
+  type: string
+}
+
+export type PandaScoreSerieMatch = {
+  id: number
+  name: string
+  status: 'not_started' | 'running' | 'finished' | 'canceled' | 'postponed'
+  scheduled_at?: string
+  begin_at?: string
+  end_at?: string
+  number_of_games?: number
+  opponents?: PandaScoreOpponent[]
+  results?: Array<{ team_id: number; score: number }>
+  tournament?: { id: number; name: string; slug: string }
+  league?: { id: number; name: string; slug: string }
+}
+
+export type PandaScoreOpponent = {
+  opponent: PandaScoreTeamRef
+  type: string
+}
+
+export type PandaScorePlayer = {
+  id: number
+  name: string
+  first_name?: string
+  last_name?: string
+  image_url?: string
+  nationality?: string
+  role?: string
+  age?: number
+  hometown?: string
+}
+
+export type PandaScoreRoster = {
+  team: PandaScoreTeamRef
+  players: PandaScorePlayer[]
+}
+
+export type NotificationType =
+  | 'comment'
+  | 'reply'
+  | 'follow'
+  | 'post_like'
+  | 'toxic_warning'
+  | 'account_ban'
+
+export type Notification = {
+  _id: string
+  userId: string
+  actorId?: string
+  type: NotificationType
+  postId?: string
+  commentId?: string
+  message?: string
+  isRead: boolean
+  readAt?: string
+  createdAt: string
+  // legacy fields from old notification shape
+  read?: boolean
+  title?: string
+  body?: string
+}
+
+/** User with toxic strike info — returned by GET /admin/users/toxic */
+export type ToxicUser = {
+  _id: string
+  displayName: string
+  email: string
+  avatarUrl?: string
+  toxicStrikeCount: number
+  banUntil: string | null
+  banReason: string | null
+  isBanned: boolean
+  isPermanent: boolean
+}
+

@@ -52,7 +52,7 @@ export function ProductDetailPage() {
   )
 
   const p = product
-  const images = p.images?.length ? p.images : p.imageUrl ? [p.imageUrl] : []
+  const images = p.imageUrls?.length ? p.imageUrls : p.imageUrl ? [p.imageUrl] : []
   const price = selectedVariant ? selectedVariant.price : p.price
   const inStock = selectedVariant ? selectedVariant.stock > 0 : (p.stock ?? 1) > 0
 
@@ -76,7 +76,13 @@ export function ProductDetailPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '2rem', alignItems: 'start' }} className="product-detail-grid">
         {/* Images */}
         <div style={{ display: 'grid', gap: '0.85rem' }}>
-          <div style={{ borderRadius: 'var(--r-lg)', aspectRatio: '4/3', backgroundImage: `url(${images[activeImg]})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid var(--line)' }} />
+          {images.length > 0 ? (
+            <div style={{ borderRadius: 'var(--r-lg)', aspectRatio: '4/3', backgroundImage: `url(${images[activeImg]})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid var(--line)' }} />
+          ) : (
+            <div style={{ borderRadius: 'var(--r-lg)', aspectRatio: '4/3', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-2)', fontSize: '4rem' }}>
+              📦
+            </div>
+          )}
           {images.length > 1 && (
             <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
               {images.map((img, i) => (
@@ -88,7 +94,6 @@ export function ProductDetailPage() {
 
         {/* Info */}
         <div style={{ display: 'grid', gap: '1rem' }}>
-          {product.game && <Badge tone="warn">{product.game.toUpperCase()}</Badge>}
           <h1 style={{ margin: 0, fontSize: 'clamp(1.5rem, 2.6vw, 2rem)', fontWeight: 800, letterSpacing: '-0.025em' }}>{product.name}</h1>
           <p style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: 'var(--accent-2)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
             {fmtPrice(price)}

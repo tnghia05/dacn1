@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from '../../contexts/CartContext'
 import { apiRequest, ApiError } from '../../shared/api/client'
-import type { Order } from '../../shared/api/types'
+import type { Order, PointsBalance } from '../../shared/api/types'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '../../contexts/AuthContext'
 import { Btn, SectionHeader } from '../../shared/components/Ui'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫'
@@ -20,10 +22,28 @@ export function CheckoutPage() {
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pointsToUse, setPointsToUse] = useState(0)
+  const { user } = useAuth()
 
+  const { data: pointsData } = useQuery({
+    queryKey: ['points-me'],
+    queryFn: () => apiRequest<PointsBalance>('/points/me?limit=1'),
+    enabled: !!user,
+  })
+
+  const availablePoints = pointsData?.balance ?? user?.points ?? 0
   const subtotal = totalPrice
   const shipping = items.length > 0 ? SHIPPING : 0
-  const total = subtotal + shipping
+  const pointsDiscountVnd = pointsToUse * 100
+  const total = Math.max(0, subtotal + shipping - pointsDiscountVnd)
+
+  const maxPointsUsable = Math.min(availablePoints, Math.floor((subtotal + shipping) / 100))
+
+  const handlePointsInput = useCallback((val: string) => {
+    const n = parseInt(val, 10)
+    if (isNaN(n) || n < 0) { setPointsToUse(0); return }
+    setPointsToUse(Math.min(n, maxPointsUsable))
+  }, [maxPointsUsable])
 
   async function onPlaceOrder(e: FormEvent) {
     e.preventDefault()
@@ -37,16 +57,38 @@ export function CheckoutPage() {
           qty: it.qty,
           ...(it.variantId ? { variantId: it.variantId } : {}),
         })),
-        shippingAddress: { name, phone, address },
-        paymentMethod: method,
+        receiverName: name,
+        phone,
+        shippingAddress: [address].filter(Boolean).join(', '),
       }
       if (note.trim()) body.note = note.trim()
+      if (pointsToUse > 0) body.pointsDiscount = pointsToUse
 
       const order = await apiRequest<Order>('/orders', { method: 'POST', body })
 
-      if (method === 'vnpay' && order.paymentUrl) {
+      if (method === 'vnpay') {
+        // Backend requires a separate call to generate the VNPay payment URL
+        let vnpayUrl: string
+        try {
+          const vnpayRes = await apiRequest<{ paymentUrl: string }>(
+            `/payments/vnpay/orders/${order._id}/url`,
+            {
+              method: 'POST',
+              body: { returnUrl: `${window.location.origin}/order/success` },
+            },
+          )
+          vnpayUrl = vnpayRes.paymentUrl
+        } catch (vnpErr) {
+          setError(
+            vnpErr instanceof ApiError
+              ? `Không thể tạo link thanh toán VNPay: ${vnpErr.message}`
+              : 'Không thể kết nối VNPay. Vui lòng thử lại hoặc chọn COD.',
+          )
+          setLoading(false)
+          return
+        }
         clearCart()
-        window.location.href = order.paymentUrl
+        window.location.href = vnpayUrl
       } else {
         clearCart()
         navigate('/order/success', { state: { orderId: order._id } })
@@ -169,6 +211,40 @@ export function CheckoutPage() {
                 <span style={{ color: 'var(--muted)' }}>Giao hàng</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(shipping)}</span>
               </div>
+
+              {user && availablePoints > 0 && (
+                <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', display: 'grid', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>🏆 Dùng điểm tích lũy</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Có {availablePoints.toLocaleString('vi-VN')} điểm</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={maxPointsUsable}
+                      value={pointsToUse || ''}
+                      placeholder="0"
+                      onChange={e => handlePointsInput(e.target.value)}
+                      style={{ flex: 1, padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1px solid var(--accent-line)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.88rem' }}
+                    />
+                    <Btn variant="ghost" onClick={() => setPointsToUse(maxPointsUsable)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}>Tối đa</Btn>
+                  </div>
+                  {pointsToUse > 0 && (
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#4ade80' }}>
+                      Giảm {fmt(pointsDiscountVnd)} (1 điểm = 100 ₫)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {pointsToUse > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#4ade80', fontSize: '0.85rem' }}>🏆 Giảm điểm ({pointsToUse.toLocaleString('vi-VN')} đ)</span>
+                  <span style={{ color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>-{fmt(pointsDiscountVnd)}</span>
+                </div>
+              )}
+
               <div
                 style={{
                   display: 'flex',

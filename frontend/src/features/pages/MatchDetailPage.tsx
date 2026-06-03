@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQueries, useQuery } from '@tanstack/react-query'
-import { apiRequest } from '../../shared/api/client'
-import type { MatchItem, LoLEsportsEvent, LoLLiveStatsWindow, PostgameStats, PostgameParticipant } from '../../shared/api/types'
+import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiRequest, ApiError } from '../../shared/api/client'
+import type { MatchItem, LoLEsportsEvent, LoLLiveStatsWindow, PostgameStats, PostgameParticipant, TimelinePoint, Prediction, PandaScoreStanding } from '../../shared/api/types'
 import { IMG } from '../../shared/data/mock'
-import { Badge, SectionHeader } from '../../shared/components/Ui'
+import { Badge, Btn, SectionHeader } from '../../shared/components/Ui'
+import { useAuth } from '../../contexts/AuthContext'
 
 interface KalstropTeam { id: string; name: string; logoUrl?: string; oddsDecimal?: number; probability?: number }
 interface KalstropFixture { id: string; slug: string; name: string; startTime: string; status: string; competition: string; competitionSlug: string; category: string; teams: [KalstropTeam, KalstropTeam]; preMatchWidgetUrl?: string }
@@ -16,6 +17,36 @@ function findKalstrop(nA: string, nB: string, list: KalstropFixture[]): Kalstrop
     return (k0.includes(a) || a.includes(k0)) && (k1.includes(b) || b.includes(k1))
         || (k0.includes(b) || b.includes(k0)) && (k1.includes(a) || a.includes(k1))
   })
+}
+function TeamLogo({ teamName, teamAcronym, imageUrl, size = 28 }: { teamName: string; teamAcronym?: string; imageUrl?: string; size?: number }) {
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={teamAcronym ?? teamName}
+        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 4, background: 'var(--surface-2)', padding: 2 }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+      />
+    )
+  }
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 4,
+        background: 'var(--surface-3)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: size * 0.4,
+        fontWeight: 700,
+        color: 'var(--muted)',
+      }}
+    >
+      {(teamAcronym ?? teamName).slice(0, 2).toUpperCase()}
+    </span>
+  )
 }
 function OddsDetailPanel({ fixture }: { fixture: KalstropFixture }) {
   const [tA, tB] = fixture.teams
@@ -157,13 +188,37 @@ function StreamEmbed({ streams, isLive }: { streams: LoLEsportsEvent['streams'];
   const hasYoutube = !!streams.youtube
   const hasTwitch = !!streams.twitch
 
+  const lplUrl = streams.lpl?.url
+  const bilibiliUrl = streams.bilibili?.url
+  const hasExternal = !!(lplUrl || bilibiliUrl)
+
   if (!hasYoutube && !hasTwitch) {
     return (
-      <div className="video-placeholder" style={{ backgroundImage: `url(${IMG.stream})` }}>
-        <span className="video-play">▶</span>
-        <p style={{ position: 'absolute', bottom: 8, left: 0, right: 0, textAlign: 'center', fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>
-          Stream chưa có sẵn
-        </p>
+      <div>
+        <div className="video-placeholder" style={{ backgroundImage: `url(${IMG.stream})` }}>
+          <span className="video-play">▶</span>
+          <p style={{ position: 'absolute', bottom: 8, left: 0, right: 0, textAlign: 'center', fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>
+            Stream chưa có sẵn
+          </p>
+        </div>
+        {hasExternal && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem', flexWrap: 'wrap' }}>
+            {lplUrl && (
+              <a href={lplUrl.startsWith('http') ? lplUrl : `https://lpl.qq.com/es/live.shtml`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.9rem', borderRadius: 6, background: 'rgb(0 164 255 / 15%)', border: '1px solid rgb(0 164 255 / 40%)', fontSize: '0.8rem', fontWeight: 600, color: '#00a4ff', textDecoration: 'none' }}>
+                🎮 Xem trực tiếp trên LPL →
+              </a>
+            )}
+            {bilibiliUrl && (
+              <a href={bilibiliUrl.startsWith('http') ? bilibiliUrl : `https://www.bilibili.com`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.9rem', borderRadius: 6, background: 'rgb(0 180 214 / 15%)', border: '1px solid rgb(0 180 214 / 40%)', fontSize: '0.8rem', fontWeight: 600, color: '#00b4d6', textDecoration: 'none' }}>
+                📺 Xem trên Bilibili →
+              </a>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -239,28 +294,6 @@ function StreamEmbed({ streams, isLive }: { streams: LoLEsportsEvent['streams'];
   )
 }
 
-function GameTracker({ games }: { games: LoLEsportsEvent['match']['games']; teams: LoLEsportsEvent['match']['teams'] }) {
-  return (
-    <div style={{ display: 'grid', gap: '0.5rem' }}>
-      {games.map((g) => (
-        <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderRadius: 8, background: g.state === 'inProgress' ? 'var(--accent-soft)' : 'rgb(255 255 255 / 4%)', border: `1px solid ${g.state === 'inProgress' ? 'var(--accent)' : 'var(--line)'}` }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600, minWidth: 40 }}>
-            Ván {g.number}
-          </span>
-          {g.state === 'completed' && (
-            <Badge tone="default">Xong</Badge>
-          )}
-          {g.state === 'inProgress' && (
-            <Badge tone="live">LIVE</Badge>
-          )}
-          {g.state === 'unstarted' && (
-            <span style={{ fontSize: '0.74rem', color: 'var(--muted-2)' }}>Chưa bắt đầu</span>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
 
 const DRAGON_EMOJI: Record<string, string> = {
   fire: '🔥', ocean: '🌊', mountain: '⛰️', cloud: '💨', hextech: '⚡', chemtech: '☣️', elder: '👁️',
@@ -382,6 +415,61 @@ function PreMatchWidgetCollapsible({ fixture }: { fixture: KalstropFixture }) {
   )
 }
 
+function GoldDiffChart({ data, blueTeam, redTeam }: { data: TimelinePoint[]; blueTeam: string; redTeam: string }) {
+  if (!data.length) return null
+  const W = 600, H = 140, PAD = { top: 24, bottom: 28, left: 8, right: 8 }
+  const innerW = W - PAD.left - PAD.right
+  const innerH = H - PAD.top - PAD.bottom
+
+  const maxAbs = Math.max(...data.map(d => Math.abs(d.diff)), 500)
+  const maxMin = data[data.length - 1].minute || 1
+
+  const xScale = (min: number) => PAD.left + (min / maxMin) * innerW
+  const yScale = (diff: number) => PAD.top + innerH / 2 - (diff / maxAbs) * (innerH / 2)
+  const zeroY = PAD.top + innerH / 2
+
+  // Build SVG path for the area above/below zero
+  const pts = data.map(d => ({ x: xScale(d.minute), y: yScale(d.diff), diff: d.diff }))
+
+  const bluePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+    + ` L${pts[pts.length - 1].x.toFixed(1)},${zeroY} L${pts[0].x.toFixed(1)},${zeroY} Z`
+
+  const minuteMarks = Array.from({ length: Math.floor(maxMin / 5) + 1 }, (_, i) => i * 5)
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block' }}>
+        {/* Zero line */}
+        <line x1={PAD.left} y1={zeroY} x2={W - PAD.right} y2={zeroY} stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
+
+        {/* Blue advantage area */}
+        <clipPath id="clip-above"><rect x={PAD.left} y={PAD.top} width={innerW} height={innerH / 2} /></clipPath>
+        <path d={bluePath} fill="#4e9af1" fillOpacity={0.45} clipPath="url(#clip-above)" />
+
+        {/* Red advantage area */}
+        <clipPath id="clip-below"><rect x={PAD.left} y={zeroY} width={innerW} height={innerH / 2} /></clipPath>
+        <path d={bluePath} fill="#e84057" fillOpacity={0.45} clipPath="url(#clip-below)" />
+
+        {/* Line */}
+        <polyline
+          points={pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
+          fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth={1.5} strokeLinejoin="round"
+        />
+
+        {/* Minute labels */}
+        {minuteMarks.map(m => (
+          <text key={m} x={xScale(m).toFixed(1)} y={H - 4} textAnchor="middle"
+            fontSize={9} fill="rgba(255,255,255,0.35)">{m < 10 ? `0${m}` : m}</text>
+        ))}
+
+        {/* Team labels */}
+        <text x={PAD.left + 4} y={PAD.top + 11} fontSize={9} fill="#4e9af1" fontWeight={700}>{blueTeam}</text>
+        <text x={PAD.left + 4} y={H - PAD.bottom - 4} fontSize={9} fill="#e84057" fontWeight={700}>{redTeam}</text>
+      </svg>
+    </div>
+  )
+}
+
 const ROLE_LABEL: Record<string, string> = { top: 'Top', jungle: 'Jungle', mid: 'Mid', bottom: 'Bot', support: 'Sup' }
 function champIcon(championId: string) {
   if (!championId) return null
@@ -427,9 +515,325 @@ function PostgameTable({ stats, blueTeamName, redTeamName }: { stats: PostgameSt
   )
 }
 
+function useCountUp(target: number, active: boolean, duration = 700) {
+  const [val, setVal] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    if (!active || !target) { setVal(0); return }
+    let current = 0
+    const steps = 45
+    const inc = target / steps
+    timerRef.current = setInterval(() => {
+      current += inc
+      if (current >= target) {
+        setVal(target)
+        if (timerRef.current) clearInterval(timerRef.current)
+      } else {
+        setVal(parseFloat(current.toFixed(2)))
+      }
+    }, duration / steps)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [active, target, duration])
+  return val
+}
+
+function PredictionPanel({ matchId, matchStatus, teams, oddsA, oddsB, visible }: {
+  matchId: string
+  matchStatus: string
+  teams: Array<{ name?: string; acronym?: string }>
+  oddsA?: number
+  oddsB?: number
+  visible: boolean
+}) {
+  const { user, refreshUser } = useAuth()
+  const qc = useQueryClient()
+  const [bet, setBet] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [selectedTeam, setSelectedTeam] = useState<0 | 1 | null>(null)
+
+  const betN = parseInt(bet, 10)
+  const potentialA = oddsA && betN > 0 ? Math.floor(betN * oddsA) : null
+  const potentialB = oddsB && betN > 0 ? Math.floor(betN * oddsB) : null
+  const animOddsA = useCountUp(oddsA ?? 0, visible)
+  const animOddsB = useCountUp(oddsB ?? 0, visible)
+  const animPotA = useCountUp(potentialA ?? 0, visible && !!potentialA)
+  const animPotB = useCountUp(potentialB ?? 0, visible && !!potentialB)
+
+  const { data: myPred } = useQuery({
+    queryKey: ['my-pred', matchId],
+    queryFn: () => apiRequest<Prediction | null>(`/points/predictions/match/${matchId}`),
+    enabled: !!user && !!matchId,
+  })
+
+  const placeMutation = useMutation({
+    mutationFn: (body: { matchId: string; teamIndex: number; pointsBet: number; oddsSnapshot: number }) =>
+      apiRequest<Prediction>('/points/predictions', { method: 'POST', body }),
+    onSuccess: (pred) => {
+      setSuccess(`✅ Đã đặt ${pred.pointsBet.toLocaleString('vi-VN')} điểm cho ${pred.teamName}`)
+      setError('')
+      setBet('')
+      qc.invalidateQueries({ queryKey: ['my-pred', matchId] })
+      qc.invalidateQueries({ queryKey: ['points-me'] })
+      refreshUser()
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'Đặt cược thất bại'),
+  })
+
+  function handleConfirm() {
+    if (selectedTeam === null) { setError('Vui lòng chọn một đội'); return }
+    const pts = parseInt(bet, 10)
+    if (!pts || pts < 1) { setError('Nhập số điểm hợp lệ (tối thiểu 1)'); return }
+    const odds = selectedTeam === 0 ? oddsA : oddsB
+    if (!odds) { setError('Không có odds cho đội này'); return }
+    setError('')
+    placeMutation.mutate({ matchId, teamIndex: selectedTeam, pointsBet: pts, oddsSnapshot: odds })
+  }
+
+  if (!user) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-start' }}>
+      <span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>Bạn cần đăng nhập để tham gia dự đoán.</span>
+      <Link to="/auth/login"><Btn>Đăng nhập để cược</Btn></Link>
+    </div>
+  )
+
+  if (matchStatus === 'finished' || matchStatus === 'live') return (
+    <div style={{ padding: '1rem 0', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
+      {matchStatus === 'live'
+        ? '🔴 Trận đang diễn ra — không thể đặt cược'
+        : '🏁 Trận đã kết thúc'}
+    </div>
+  )
+
+  if (myPred) {
+    const STATUS_COLOR: Record<string, string> = { pending: '#fb923c', won: '#4ade80', lost: '#f87171', cancelled: 'var(--muted)' }
+    return (
+      <div style={{ display: 'grid', gap: '1rem' }}>
+        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Dự đoán của bạn</p>
+        <div style={{ padding: '1rem', borderRadius: '10px', background: 'rgb(255 255 255 / 4%)', border: '1px solid var(--line)', display: 'grid', gap: '0.5rem' }}>
+          <span style={{ fontWeight: 800, fontSize: '1rem' }}>{myPred.teamName}</span>
+          <span style={{ fontSize: '0.82rem', color: 'var(--muted-2)', fontVariantNumeric: 'tabular-nums' }}>
+            Cược: {myPred.pointsBet.toLocaleString('vi-VN')} điểm · Odds: {myPred.oddsAtBet.toFixed(2)}
+          </span>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: STATUS_COLOR[myPred.status] }}>
+              {myPred.status === 'pending' ? '⏳ Đang chờ kết quả' : myPred.status === 'won' ? '🏆 Thắng!' : myPred.status === 'lost' ? '❌ Thua' : '🚫 Đã huỷ'}
+            </span>
+            {myPred.status === 'won' && (
+              <span style={{ color: '#4ade80', fontWeight: 800, fontSize: '0.9rem', fontVariantNumeric: 'tabular-nums' }}>+{(myPred.pointsWon ?? 0).toLocaleString('vi-VN')} điểm</span>
+            )}
+          </div>
+        </div>
+        <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--muted-2)' }}>Mỗi trận chỉ được dự đoán một lần.</p>
+      </div>
+    )
+  }
+
+  if (!oddsA && !oddsB) return null
+
+  const selPotential = selectedTeam === 0 ? animPotA : selectedTeam === 1 ? animPotB : null
+  const canConfirm = selectedTeam !== null && !placeMutation.isPending
+
+  return (
+    <div style={{ display: 'grid', gap: '1.5rem' }}>
+
+      {/* Step hint */}
+      <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--muted-2)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <span style={{ color: selectedTeam !== null ? '#4ade80' : '#63b3ed', fontWeight: 700 }}>①</span> Chọn đội
+        <span style={{ opacity: 0.3 }}>→</span>
+        <span style={{ color: betN > 0 ? '#4ade80' : selectedTeam !== null ? '#63b3ed' : 'var(--muted-2)', fontWeight: 700 }}>②</span> Nhập điểm
+        <span style={{ opacity: 0.3 }}>→</span>
+        <span style={{ color: canConfirm && betN > 0 ? '#63b3ed' : 'var(--muted-2)', fontWeight: 700 }}>③</span> Xác nhận
+      </p>
+
+      {/* Selectable odds cards */}
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        {([0, 1] as const).map(idx => {
+          const isA = idx === 0
+          const odds = isA ? oddsA : oddsB
+          const animOdds = isA ? animOddsA : animOddsB
+          const teamName = teams[idx]?.name ?? (isA ? 'Đội A' : 'Đội B')
+          const isSelected = selectedTeam === idx
+          const isOther = selectedTeam !== null && selectedTeam !== idx
+          const clr = isA ? '#e4b84d' : '#e2e8f0'
+          const clrRgb = isA ? '228,184,77' : '226,232,240'
+          if (!odds) return null
+          return (
+            <button
+              key={idx}
+              onClick={() => { setSelectedTeam(isSelected ? null : idx); setError('') }}
+              style={{
+                flex: 1,
+                padding: '1.1rem 0.85rem 0.9rem',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+                outline: 'none',
+                transition: 'transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease, box-shadow 0.28s ease, border-color 0.2s ease',
+                background: isSelected
+                  ? `linear-gradient(160deg, rgba(${clrRgb},0.14) 0%, rgba(${clrRgb},0.06) 100%)`
+                  : 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
+                border: isSelected ? `1.5px solid rgba(${clrRgb},0.85)` : '1.5px solid rgba(255,255,255,0.08)',
+                boxShadow: isSelected
+                  ? `0 0 28px rgba(${clrRgb},0.4), 0 8px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1)`
+                  : '0 2px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)',
+                transform: isSelected ? 'scale(1.06) translateY(-3px)' : isOther ? 'scale(0.93) translateY(3px)' : 'scale(1)',
+                opacity: isOther ? 0.38 : 1,
+              }}
+            >
+              {/* Top glow ray */}
+              {isSelected && (
+                <div style={{
+                  position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+                  width: '80%', height: '1.5px',
+                  background: `linear-gradient(90deg, transparent, rgba(${clrRgb},0.95), transparent)`,
+                  borderRadius: '999px',
+                }} />
+              )}
+              {/* Inner radial glow */}
+              {isSelected && (
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: `radial-gradient(ellipse at 50% -10%, rgba(${clrRgb},0.18) 0%, transparent 65%)`,
+                  pointerEvents: 'none',
+                }} />
+              )}
+
+              <p style={{
+                margin: 0, fontSize: '0.65rem', fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.1em',
+                color: isSelected ? clr : 'rgba(255,255,255,0.35)',
+                transition: 'color 0.22s',
+              }}>{teamName}</p>
+
+              <p style={{
+                margin: '0.4rem 0 0', fontSize: '2.2rem', fontWeight: 900, lineHeight: 1,
+                fontVariantNumeric: 'tabular-nums',
+                color: clr,
+                textShadow: isSelected
+                  ? `0 0 28px rgba(${clrRgb},0.75), 0 2px 4px rgba(0,0,0,0.5)`
+                  : `0 0 12px rgba(${clrRgb},0.3)`,
+                transition: 'all 0.22s ease',
+              }}>
+                {animOdds.toFixed(2)}
+              </p>
+
+              <div style={{ marginTop: '0.55rem', minHeight: '1.1rem' }}>
+                {isSelected ? (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.2rem',
+                    padding: '0.2rem 0.65rem', borderRadius: '999px',
+                    background: `rgba(${clrRgb},0.18)`, border: `1px solid rgba(${clrRgb},0.55)`,
+                    fontSize: '0.62rem', color: clr, fontWeight: 700, letterSpacing: '0.06em',
+                  }}>✓ ĐÃ CHỌN</span>
+                ) : (
+                  <span style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.04em' }}>bấm để chọn</span>
+                )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Points input */}
+      <div style={{ display: 'grid', gap: '0.6rem' }}>
+        <label style={{ fontSize: '0.68rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Số điểm cược</label>
+        <div style={{ position: 'relative' }}>
+          <input
+            type="number" min={1} placeholder="0"
+            value={bet}
+            onChange={e => { setBet(e.target.value); setError(''); setSuccess('') }}
+            style={{
+              width: '100%', padding: '0.75rem 3.5rem 0.75rem 1rem',
+              borderRadius: '12px',
+              border: `1.5px solid ${betN > 0 ? 'rgba(99,179,237,0.5)' : 'rgba(255,255,255,0.1)'}`,
+              background: 'rgba(255,255,255,0.04)',
+              color: 'var(--text)', fontSize: '1.15rem', fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums',
+              boxSizing: 'border-box',
+              outline: 'none',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+              boxShadow: betN > 0 ? '0 0 0 3px rgba(99,179,237,0.12)' : 'none',
+            }}
+          />
+          <span style={{
+            position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)',
+            fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 700, pointerEvents: 'none',
+          }}>điểm</span>
+        </div>
+        {selPotential !== null && selPotential > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.5rem 0.85rem', borderRadius: '10px',
+            background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
+          }}>
+            <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)' }}>Tiềm năng nhận:</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
+              +{Math.floor(selPotential).toLocaleString('vi-VN')} điểm
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Confirm button */}
+      <button
+        onClick={handleConfirm}
+        disabled={!canConfirm}
+        style={{
+          width: '100%', padding: '0.9rem 1rem',
+          borderRadius: '12px', border: 'none',
+          cursor: canConfirm ? 'pointer' : 'not-allowed',
+          fontSize: '0.92rem', fontWeight: 800, letterSpacing: '0.05em', color: '#fff',
+          background: canConfirm
+            ? 'linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%)'
+            : 'rgba(255,255,255,0.07)',
+          boxShadow: canConfirm
+            ? '0 4px 24px rgba(79,70,229,0.55), 0 1px 0 rgba(255,255,255,0.15) inset'
+            : 'none',
+          transform: canConfirm ? 'translateY(-1px)' : 'none',
+          opacity: canConfirm ? 1 : 0.35,
+          transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+        }}
+      >
+        {placeMutation.isPending
+          ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>⏳ Đang xử lý…</span>
+          : '✔ Xác nhận dự đoán'}
+      </button>
+
+      {error && (
+        <div style={{ display: 'flex', gap: '0.4rem', padding: '0.55rem 0.85rem', borderRadius: '8px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)' }}>
+          <span style={{ fontSize: '0.82rem', color: '#f87171' }}>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div style={{ display: 'flex', gap: '0.4rem', padding: '0.55rem 0.85rem', borderRadius: '8px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)' }}>
+          <span style={{ fontSize: '0.82rem', color: '#4ade80' }}>{success}</span>
+        </div>
+      )}
+      <p style={{ margin: 0, fontSize: '0.68rem', color: 'var(--muted-2)', textAlign: 'center' }}>1 điểm = 1 đơn vị · Thắng được nhân theo odds lúc đặt</p>
+    </div>
+  )
+}
+
+
 export function MatchDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [selectedGameIdx, setSelectedGameIdx] = useState(0)
+  const [showPrediction, setShowPrediction] = useState(false)
+  const [predAnimIn, setPredAnimIn] = useState(false)
+
+  function togglePrediction() {
+    if (!showPrediction) {
+      setShowPrediction(true)
+      requestAnimationFrame(() => requestAnimationFrame(() => setPredAnimIn(true)))
+    } else {
+      setPredAnimIn(false)
+      setTimeout(() => setShowPrediction(false), 380)
+    }
+  }
 
   const { data: match, isLoading, isError } = useQuery({
     queryKey: ['match', id],
@@ -449,7 +853,7 @@ export function MatchDetailPage() {
   } = useQuery({
     queryKey: ['pandascore-match-detail', pandaMatchIdOrSlug],
     queryFn: () => apiRequest<unknown>(`/pandascore/matches/${pandaMatchIdOrSlug}`),
-    enabled: Boolean(!isLoL && isPandaScore && pandaMatchIdOrSlug),
+    enabled: Boolean(isPandaScore && pandaMatchIdOrSlug),
     staleTime: 60_000,
   })
 
@@ -460,7 +864,7 @@ export function MatchDetailPage() {
   } = useQuery({
     queryKey: ['pandascore-match-opponents', pandaMatchIdOrSlug],
     queryFn: () => apiRequest<unknown>(`/pandascore/matches/${pandaMatchIdOrSlug}/opponents`),
-    enabled: Boolean(!isLoL && isPandaScore && pandaMatchIdOrSlug),
+    enabled: Boolean(isPandaScore && pandaMatchIdOrSlug),
     staleTime: 5 * 60_000,
   })
 
@@ -613,6 +1017,38 @@ export function MatchDetailPage() {
     },
     enabled: isLoL && !!selectedGameId && selectedGame?.state === 'completed',
     staleTime: 5 * 60_000,
+  })
+
+  const { data: timeline } = useQuery({
+    queryKey: ['lol-timeline', selectedGameId],
+    queryFn: () => apiRequest<TimelinePoint[]>(`/lol-esports/timeline/${selectedGameId}`),
+    enabled: isLoL && !!selectedGameId && selectedGame?.state === 'completed',
+    staleTime: 10 * 60_000,
+  })
+
+  const serieSlug = panda?.serie?.slug
+  const { data: serieDetail } = useQuery<any>({
+    queryKey: ['pandascore-serie-detail', serieSlug],
+    queryFn: () => apiRequest<any>(`/pandascore/series/${serieSlug}`),
+    enabled: Boolean(serieSlug),
+    staleTime: 10 * 60_000,
+  })
+
+  const tournaments = Array.isArray(serieDetail?.tournaments) ? serieDetail.tournaments : []
+  const regularTournament = tournaments.find((t: any) => {
+    const name = (t.name || '').toLowerCase()
+    return name.includes('regular') || name.includes('group') || name.includes('swiss') || name.includes('vòng bảng') || name.includes('stage 1') || name.includes('stage 2')
+  }) ?? tournaments.find((t: any) => {
+    const name = (t.name || '').toLowerCase()
+    return !name.includes('playoff') && !name.includes('final') && !name.includes('knockout')
+  }) ?? tournaments[0]
+
+  const tournamentId = regularTournament?.id ?? panda?.tournament?.id
+  const { data: standings = [], isLoading: isLoadingStandings } = useQuery<PandaScoreStanding[]>({
+    queryKey: ['tournament-standings', tournamentId],
+    queryFn: () => apiRequest<PandaScoreStanding[]>(`/pandascore/tournaments/${tournamentId}/standings`, { noAuth: true }),
+    enabled: Boolean(tournamentId),
+    staleTime: 1000 * 60 * 5,
   })
 
   if (isLoading) {
@@ -814,19 +1250,113 @@ export function MatchDetailPage() {
             </div>
           </div>
           {kalstropFixtureWithOdds && <OddsDetailPanel fixture={kalstropFixtureWithOdds} />}
+          {kalstropFixtureWithOdds && match.status === 'not_started' && id && (
+            <div style={{ textAlign: 'center', marginTop: '0.85rem' }}>
+              <button
+                onClick={togglePrediction}
+                style={{
+                  background: showPrediction
+                    ? 'rgba(99,179,237,0.18)'
+                    : 'rgba(255,255,255,0.08)',
+                  border: `1px solid ${showPrediction ? 'rgba(99,179,237,0.55)' : 'rgba(255,255,255,0.18)'}`,
+                  color: showPrediction ? '#93c5fd' : '#fff',
+                  padding: '0.5rem 1.5rem',
+                  borderRadius: '24px',
+                  cursor: 'pointer',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  transition: 'all 0.22s ease',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                {showPrediction ? '× Đóng' : '🎯 Dự đoán ngay'}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
+      {id && showPrediction && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={togglePrediction}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.52)',
+              backdropFilter: 'blur(3px)',
+              zIndex: 98,
+              opacity: predAnimIn ? 1 : 0,
+              transition: 'opacity 0.3s ease',
+            }}
+          />
+          {/* Drawer */}
+          <div
+            style={{
+              position: 'fixed', top: 0, right: 0, bottom: 0,
+              width: 'clamp(280px, 33vw, 460px)',
+              background: 'var(--surface, #0d1117)',
+              borderLeft: '1px solid var(--line)',
+              boxShadow: '-12px 0 48px rgba(0,0,0,0.6)',
+              zIndex: 99,
+              display: 'flex',
+              flexDirection: 'column',
+              transform: predAnimIn ? 'translateX(0)' : 'translateX(100%)',
+              transition: 'transform 0.42s cubic-bezier(0.16,1,0.3,1)',
+            }}
+          >
+            {/* Drawer header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🎯 Dự đoán kết quả</p>
+              <button onClick={togglePrediction} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1, padding: '0 0.2rem' }}>×</button>
+            </div>
+            {/* Match info strip */}
+            {kalstropFixtureWithOdds && (
+              <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--line)', flexShrink: 0, fontSize: '0.8rem', color: 'var(--muted)' }}>
+                {match.teams[0]?.name ?? 'Team A'}
+                <span style={{ margin: '0 0.5rem', opacity: 0.4 }}>vs</span>
+                {match.teams[1]?.name ?? 'Team B'}
+              </div>
+            )}
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+              <PredictionPanel
+                matchId={id}
+                matchStatus={match.status}
+                teams={match.teams}
+                oddsA={kalstropFixtureWithOdds?.teams[0].oddsDecimal}
+                oddsB={kalstropFixtureWithOdds?.teams[1].oddsDecimal}
+                visible={predAnimIn}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="two-col">
         <div className="section-stack">
-          {/* Game tracker */}
-          {liveEvent && liveEvent.match.games.length > 0 && (
+          {/* Pre-match Kalstrop widget — at the top */}
+          {isLoL && kalstropFixtureWithOdds?.preMatchWidgetUrl && richEvent?.state !== 'completed' && (
+            <PreMatchWidgetCollapsible fixture={kalstropFixtureWithOdds} />
+          )}
+
+          {/* Stream */}
+          {isLoL && (
             <div className="surface-card">
-              <SectionHeader
-                title="Diễn biến trận"
-                subtitle={`BO${liveEvent.match.strategy?.count ?? match.numberOfGames ?? '?'}`}
-              />
-              <GameTracker games={liveEvent.match.games} teams={liveEvent.match.teams} />
+              <SectionHeader title="Stream trực tiếp" />
+              <div style={{ marginTop: '0.5rem' }}>
+                {liveEvent?.streams ? (
+                  <StreamEmbed streams={liveEvent.streams} isLive={isLive} />
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <div className="video-placeholder" style={{ backgroundImage: `url(${IMG.stream})` }}>
+                      <span className="video-play">▶</span>
+                    </div>
+                    <p style={{ marginTop: '0.65rem', fontSize: '0.78rem', color: 'var(--muted)' }}>Không tìm thấy stream live cho trận này.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -862,6 +1392,17 @@ export function MatchDetailPage() {
           {isLoL && selectedGame?.state === 'completed' && (
             <div className="surface-card">
               <SectionHeader title={`Thống kê — Ván ${selectedGame.number}`} />
+              {/* Gold difference timeline */}
+              {timeline && timeline.length > 0 && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <p style={{ margin: '0 0 0.4rem', fontSize: '0.72rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chênh lệch vàng</p>
+                  <GoldDiffChart
+                    data={timeline}
+                    blueTeam={richEvent?.match.teams[0]?.code ?? 'Blue'}
+                    redTeam={richEvent?.match.teams[1]?.code ?? 'Red'}
+                  />
+                </div>
+              )}
               {isPostgameLoading && <div style={{ color: 'var(--muted)', fontSize: '0.82rem', padding: '1rem 0' }}>Đang tải...</div>}
               {!isPostgameLoading && postgame && (
                 <PostgameTable stats={postgame}
@@ -870,11 +1411,6 @@ export function MatchDetailPage() {
               )}
               {!isPostgameLoading && !postgame && <div style={{ color: 'var(--muted)', fontSize: '0.82rem', padding: '1rem 0' }}>Không có dữ liệu chi tiết cho ván này.</div>}
             </div>
-          )}
-
-          {/* Pre-match Kalstrop widget */}
-          {isLoL && kalstropFixtureWithOdds?.preMatchWidgetUrl && richEvent?.state !== 'completed' && (
-            <PreMatchWidgetCollapsible fixture={kalstropFixtureWithOdds} />
           )}
 
           {/* Match info */}
@@ -1232,37 +1768,230 @@ export function MatchDetailPage() {
         </div>
 
         <aside className="section-stack">
-          {/* Stream embed */}
-          <div className="surface-card">
-            <SectionHeader title="Stream trực tiếp" />
-            <div style={{ marginTop: '0.5rem' }}>
-              {liveEvent?.streams ? (
-                <StreamEmbed streams={liveEvent.streams} isLive={isLive} />
+          {/* League card (with fallback to match data) */}
+          {(liveEvent?.league.image || match?.leagueName) && (
+            <div className="surface-card" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem' }}>
+              {liveEvent?.league.image ? (
+                <img src={liveEvent.league.image} alt={liveEvent.league.name} style={{ width: 44, height: 44, objectFit: 'contain' }} />
               ) : (
-                <div style={{ position: 'relative' }}>
-                  <div className="video-placeholder" style={{ backgroundImage: `url(${IMG.stream})` }}>
-                    <span className="video-play">▶</span>
-                  </div>
-                  <p style={{ marginTop: '0.65rem', fontSize: '0.78rem', color: 'var(--muted)' }}>
-                    {isLoL ? 'Không tìm thấy stream live cho trận này.' : 'Stream có sẵn trên Twitch / YouTube khi trận live.'}
-                  </p>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  background: 'var(--surface-3)',
+                  border: '1px solid var(--line)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 800, color: 'var(--accent)', fontSize: '1.1rem'
+                }}>
+                  {(match.leagueName ?? match.tournamentName ?? 'G').slice(0, 2).toUpperCase()}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* League logo */}
-          {liveEvent?.league.image && (
-            <div className="surface-card" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <img src={liveEvent.league.image} alt={liveEvent.league.name} style={{ width: 40, height: 40, objectFit: 'contain' }} />
               <div>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{liveEvent.league.name}</p>
-                {liveEvent.blockName && (
-                  <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--muted)' }}>{liveEvent.blockName}</p>
-                )}
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#fff' }}>
+                  {liveEvent?.league.name ?? match.leagueName ?? match.tournamentName}
+                </p>
+                <p style={{ margin: '0.15rem 0 0', fontSize: '0.76rem', color: 'var(--muted)' }}>
+                  {liveEvent?.blockName ?? match.serieName ?? 'Giải đấu chuyên nghiệp'}
+                </p>
               </div>
             </div>
           )}
+
+          {/* Leaderboard / Standings */}
+          <div className="surface-card" style={{ padding: '1.25rem 1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>🏆</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Bảng xếp hạng</h3>
+                <p style={{ margin: '0.15rem 0 0', fontSize: '0.72rem', color: 'var(--muted)' }}>
+                  {regularTournament?.name ?? panda?.tournament?.name ?? match.tournamentName ?? 'Đang diễn ra'}
+                </p>
+              </div>
+            </div>
+
+            {isLoadingStandings && (
+              <div style={{ display: 'grid', gap: '0.4rem' }}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} style={{ height: 38, borderRadius: 8, background: 'var(--surface-2)', opacity: 0.5, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                ))}
+              </div>
+            )}
+
+            {!isLoadingStandings && standings.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                Chưa có dữ liệu xếp hạng chính thức.
+              </div>
+            )}
+
+            {!isLoadingStandings && standings.length > 0 && (
+              <div style={{ display: 'grid', gap: '0.25rem' }}>
+                {/* Headers */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '28px 1fr 52px 42px',
+                  padding: '0 0.5rem 0.4rem',
+                  fontSize: '0.64rem',
+                  fontWeight: 700,
+                  color: 'var(--muted-2)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  <span style={{ textAlign: 'center' }}>#</span>
+                  <span>Đội</span>
+                  <span style={{ textAlign: 'center' }}>H.Số</span>
+                  <span style={{ textAlign: 'right' }}>%</span>
+                </div>
+
+                {/* Rows */}
+                {standings.map((s, idx) => {
+                  const winRate = s.total > 0 ? s.wins / s.total : 0
+                  const idA = match?.teams[0]?.externalId
+                  const idB = match?.teams[1]?.externalId
+                  const nameA = (match?.teams[0]?.name ?? '').toLowerCase()
+                  const nameB = (match?.teams[1]?.name ?? '').toLowerCase()
+                  const acronymA = (match?.teams[0]?.acronym ?? '').toLowerCase()
+                  const acronymB = (match?.teams[1]?.acronym ?? '').toLowerCase()
+                  const sName = s.team.name.toLowerCase()
+                  const sAcronym = (s.team.acronym ?? '').toLowerCase()
+
+                  const isCompTeam = (idA && s.team.id === idA) ||
+                                     (idB && s.team.id === idB) ||
+                                     sName.includes(nameA) || nameA.includes(sName) ||
+                                     sName.includes(nameB) || nameB.includes(sName) ||
+                                     (acronymA && sAcronym === acronymA) ||
+                                     (acronymB && sAcronym === acronymB)
+
+                  const playoffCutoff = standings.length >= 10 ? 6 : (standings.length >= 8 ? 4 : 4)
+                  const showPlayoffDivider = idx === playoffCutoff - 1
+
+                  // Medal icon/text style
+                  const isTop3 = s.rank <= 3
+                  const medalIcons = ['🥇', '🥈', '🥉']
+                  const medalIcon = isTop3 ? medalIcons[s.rank - 1] : null
+
+                  return (
+                    <div key={s.team.id}>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '28px 1fr 52px 42px',
+                          alignItems: 'center',
+                          padding: '0.5rem',
+                          borderRadius: 8,
+                          background: isCompTeam
+                            ? `${hero.accent}20`
+                            : 'transparent',
+                          border: isCompTeam
+                            ? `1px solid ${hero.accent}45`
+                            : '1px solid transparent',
+                          boxShadow: isCompTeam ? `0 0 10px ${hero.accent}12` : undefined,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {/* Rank */}
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          {medalIcon ? (
+                            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{medalIcon}</span>
+                          ) : (
+                            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                              {s.rank}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Team */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                          <TeamLogo teamName={s.team.name} teamAcronym={s.team.acronym} imageUrl={s.team.image_url} size={22} />
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{
+                              margin: 0,
+                              fontWeight: isCompTeam ? 800 : 600,
+                              fontSize: '0.82rem',
+                              color: isCompTeam ? '#fff' : 'var(--muted-2)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {s.team.name}
+                            </p>
+                          </div>
+                          {isCompTeam && (
+                            <span style={{
+                              display: 'inline-flex',
+                              padding: '0.08rem 0.35rem',
+                              background: hero.accent,
+                              color: '#000',
+                              fontSize: '0.58rem',
+                              fontWeight: 900,
+                              borderRadius: 4,
+                              textTransform: 'uppercase',
+                              lineHeight: 1,
+                              flexShrink: 0
+                            }}>
+                              Trận này
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Record W-L */}
+                        <div style={{
+                          textAlign: 'center',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: isCompTeam ? '#fff' : 'var(--muted)',
+                          fontVariantNumeric: 'tabular-nums'
+                        }}>
+                          {s.wins}-{s.losses}
+                        </div>
+
+                        {/* Win Rate */}
+                        <div style={{
+                          textAlign: 'right',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: winRate >= 0.6
+                            ? '#4ade80'
+                            : winRate >= 0.4
+                            ? '#fbbf24'
+                            : '#f87171',
+                          fontVariantNumeric: 'tabular-nums'
+                        }}>
+                          {Math.round(winRate * 100)}%
+                        </div>
+                      </div>
+
+                      {/* Playoff dotted divider */}
+                      {showPlayoffDivider && (
+                        <div style={{ position: 'relative', margin: '0.35rem 0.5rem' }}>
+                          <div style={{ borderTop: '1px dashed rgba(74,222,128,0.25)' }} />
+                          <span style={{
+                            position: 'absolute', right: '0.5rem', top: -7,
+                            fontSize: '0.55rem', color: 'rgba(74,222,128,0.7)',
+                            background: 'var(--surface)', padding: '0 0.3rem',
+                            fontWeight: 700, letterSpacing: '0.05em',
+                          }}>Playoffs ↑</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {panda?.serie?.slug && (
+              <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--line)', paddingTop: '0.85rem', textAlign: 'center' }}>
+                <Link to={`/tournaments/${panda.serie.slug}`} style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: 'var(--accent)',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem'
+                }}>
+                  Chi tiết giải đấu ➔
+                </Link>
+              </div>
+            )}
+          </div>
         </aside>
       </div>
     </div>
