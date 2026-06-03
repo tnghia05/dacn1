@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'https://backend36.dev/api/v1'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://backend36.dev/api/v1'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
