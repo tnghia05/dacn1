@@ -2,17 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiRequest } from '../../shared/api/client'
 import type { PaginatedResponse, ToxicUser } from '../../shared/api/types'
-import { Btn, SectionHeader } from '../../shared/components/Ui'
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60_000)
-  if (m < 1) return 'Vừa xong'
-  if (m < 60) return `${m} phút trước`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h} giờ trước`
-  return `${Math.floor(h / 24)} ngày trước`
-}
+import { Btn } from '../../shared/components/Ui'
 
 function formatBanUntil(banUntil: string | null, isPermanent: boolean) {
   if (!banUntil) return null

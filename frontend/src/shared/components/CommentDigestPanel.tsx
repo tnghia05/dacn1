@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiRequest } from '../api/client'
 
 type DigestAggregate = {
@@ -69,6 +69,8 @@ const INTENT_MAP: Record<string, { label: string; color: string }> = {
 
 export function CommentDigestPanel({ postId }: { postId: string }) {
   const [expanded, setExpanded] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const qc = useQueryClient()
 
   const { data, isLoading, error } = useQuery<DigestResponse>({
     queryKey: ['comment-digest', postId],
@@ -76,6 +78,19 @@ export function CommentDigestPanel({ postId }: { postId: string }) {
     enabled: expanded,
     staleTime: 5 * 60 * 1000, // 5 min cache
   })
+
+  const handleRefresh = async () => {
+    if (isRefreshing || isLoading) return
+    setIsRefreshing(true)
+    try {
+      const refreshedData = await apiRequest<DigestResponse>(`/posts/${postId}/comment-digest?force=true`)
+      qc.setQueryData(['comment-digest', postId], refreshedData)
+    } catch (err) {
+      console.error('Failed to force refresh comment digest:', err)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   if (!expanded) {
     return (
@@ -136,7 +151,7 @@ export function CommentDigestPanel({ postId }: { postId: string }) {
             </p>
             <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--muted-2)' }}>
               PhoBERT Multitask · Tóm tắt bởi Gemini 3.1 Flash Lite
-              {data?.cached && (
+              {data?.cached && !isRefreshing && (
                 <span
                   style={{
                     marginLeft: '0.4rem',
@@ -156,22 +171,101 @@ export function CommentDigestPanel({ postId }: { postId: string }) {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setExpanded(false)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--muted)',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            padding: '0.2rem 0.4rem',
-          }}
-        >
-          ✕
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--muted)',
+              cursor: (isRefreshing || isLoading) ? 'not-allowed' : 'pointer',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              opacity: (isRefreshing || isLoading) ? 0.5 : 0.8,
+              transition: 'opacity 0.2s',
+              padding: '0.2rem 0.4rem',
+            }}
+            title="Cập nhật phân tích bình luận mới nhất"
+          >
+            <span>{isRefreshing ? '🔄 Đang làm mới...' : '🔄 Làm mới'}</span>
+          </button>
+          <button
+            onClick={() => setExpanded(false)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--muted)',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              padding: '0.2rem 0.4rem',
+            }}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      <div style={{ padding: '1rem 1.1rem', display: 'grid', gap: '1rem' }}>
+      <div
+        style={{
+          padding: '1rem 1.1rem',
+          display: 'grid',
+          gap: '1rem',
+          opacity: isRefreshing ? 0.6 : 1,
+          pointerEvents: isRefreshing ? 'none' : 'auto',
+          transition: 'opacity 0.25s ease',
+          position: 'relative',
+        }}
+      >
+        {isRefreshing && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(10, 5, 25, 0.45)',
+              backdropFilter: 'blur(1.5px)',
+              zIndex: 10,
+              borderRadius: '12px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                background: 'rgba(15, 10, 25, 0.95)',
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                padding: '0.65rem 1.1rem',
+                borderRadius: '12px',
+                color: '#c4b5fd',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+              }}
+            >
+              <span
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2.5px solid rgba(139,92,246,0.3)',
+                  borderTopColor: '#a78bfa',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  animation: 'spin 0.8s linear infinite',
+                  flexShrink: 0,
+                }}
+              />
+              Đang phân tích lại bình luận...
+            </div>
+          </div>
+        )}
+
         {isLoading && (
           <div
             style={{

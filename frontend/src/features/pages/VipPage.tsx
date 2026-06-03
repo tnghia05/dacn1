@@ -4,6 +4,7 @@ import { useCart } from '../../contexts/CartContext'
 import { getTierFromPoints, TIER_CONFIG, TIER_THRESHOLDS, pointsToNextTier } from '../../shared/utils/membership'
 import type { MemberTier } from '../../shared/utils/membership'
 import { MemberBadge } from '../../shared/components/MemberBadge'
+import { VerifiedBadge } from '../../shared/components/VerifiedBadge'
 
 /* ── VIP product IDs that exist in the store/backend ───────────────── */
 const VIP_PRODUCT_IDS: Record<Exclude<MemberTier, 'member'>, string> = {
@@ -215,7 +216,11 @@ export function VipPage() {
                   ].map((f, i) => (
                     <li key={i} style={{ display: 'flex', gap: '0.55rem', alignItems: 'flex-start', fontSize: '0.84rem', color: 'rgba(255,255,255,0.75)' }}>
                       <span style={{ color: cfg.color, marginTop: '1px', flexShrink: 0 }}>✓</span>
-                      {f}
+                      {f === 'Tích xanh xác minh ✅' ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          Tích xanh xác minh <VerifiedBadge size={14} />
+                        </span>
+                      ) : f}
                     </li>
                   ))}
                 </ul>
@@ -292,9 +297,9 @@ export function VipPage() {
               {[row.member, row.vip, row.svip, row.vvip].map((val, j) => {
                 const tier = (['member', 'vip', 'svip', 'vvip'] as MemberTier[])[j]
                 return (
-                  <div key={j} style={{ padding: '0.85rem 0.5rem', textAlign: 'center', fontSize: '0.82rem',
+                  <div key={j} style={{ padding: '0.85rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem',
                     color: tier === 'member' ? 'rgba(255,255,255,0.35)' : TIER_CONFIG[tier].color, fontWeight: tier !== 'member' ? 600 : 400 }}>
-                    {val}
+                    {val === '✅' ? <VerifiedBadge size={16} /> : val}
                   </div>
                 )
               })}

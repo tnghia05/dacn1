@@ -9,6 +9,7 @@ import { Btn, SectionHeader } from '../../shared/components/Ui'
 import { MemberBadge } from '../../shared/components/MemberBadge'
 import { getTierFromPoints, TIER_CONFIG } from '../../shared/utils/membership'
 import { CommentDigestPanel } from '../../shared/components/CommentDigestPanel'
+import { VerifiedBadge } from '../../shared/components/VerifiedBadge'
 
 function getPointsForAuthor(authorId: string, customPoints?: number): number {
   if (customPoints !== undefined) return customPoints
@@ -137,12 +138,17 @@ export function CommunityPostPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['post-comments', id] })
       qc.invalidateQueries({ queryKey: ['post', id] })
+      qc.invalidateQueries({ queryKey: ['comment-digest', id] })
       setCommentText('')
       setCommentError('')
       setTimeout(() => {
         setAiToastState('approved')
         setTimeout(() => setAiToastState('idle'), 3000)
       }, 1400)
+      // Delayed invalidation for digest to capture worker analysis
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['comment-digest', id] })
+      }, 4000)
     },
     onError: (err) => {
       setAiToastState('idle')
@@ -157,6 +163,7 @@ export function CommunityPostPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['post-comments', id] })
       qc.invalidateQueries({ queryKey: ['post', id] })
+      qc.invalidateQueries({ queryKey: ['comment-digest', id] })
     },
   })
 
@@ -166,9 +173,14 @@ export function CommunityPostPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['post-comments', id] })
       qc.invalidateQueries({ queryKey: ['post', id] })
+      qc.invalidateQueries({ queryKey: ['comment-digest', id] })
       setEditingCommentId(null)
       setEditingText('')
       setEditError('')
+      // Delayed invalidation for digest to capture worker analysis
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['comment-digest', id] })
+      }, 4000)
     },
     onError: (err) => {
       setEditError(err instanceof ApiError ? err.message : 'Sửa bình luận thất bại.')
@@ -221,7 +233,7 @@ export function CommunityPostPage() {
               const authorTier = getTierFromPoints(authorPoints)
               const authorCfg = TIER_CONFIG[authorTier]
               return (
-                <>
+                <Link to={`/users/${post.authorId}`} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'inherit', textDecoration: 'none' }} className="hover-scale">
                   <div style={{
                     width: '28px', height: '28px', borderRadius: '7px',
                     background: 'var(--accent-soft)', overflow: 'hidden', flexShrink: 0,
@@ -242,8 +254,8 @@ export function CommunityPostPage() {
                     color: authorCfg.gradient !== 'none' ? 'transparent' : authorCfg.nameCss,
                   }}>@{post.author?.displayName}</strong>
                   <MemberBadge points={authorPoints} size="sm" showLabel />
-                  {authorTier === 'vvip' && <span title="Tài khoản xác minh" style={{ fontSize: '0.85rem' }}>✅</span>}
-                </>
+                  {authorTier === 'vvip' && <VerifiedBadge size={16} />}
+                </Link>
               )
             })()}
             <span style={{ color: 'var(--muted-2)', fontSize: '0.8rem' }}>·</span>
@@ -454,8 +466,8 @@ export function CommunityPostPage() {
                         WebkitTextFillColor: cCfg.gradient !== 'none' ? 'transparent' : cCfg.nameCss,
                         color: cCfg.gradient !== 'none' ? 'transparent' : cCfg.nameCss,
                       }}>@{getAuthorName(c, user)}</strong>
-                      <MemberBadge points={cPoints} size="sm" />
-                      {cTier === 'vvip' && <span title="Tài khoản xác minh" style={{ fontSize: '0.8rem' }}>✅</span>}
+                       <MemberBadge points={cPoints} size="sm" />
+                      {cTier === 'vvip' && <VerifiedBadge size={15} />}
                       {/* AI Sentiment pill — luôn hiện, không cần toggle */}
                     {c.sentiment4 && (
                       <span

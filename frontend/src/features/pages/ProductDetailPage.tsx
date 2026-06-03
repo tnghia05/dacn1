@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiRequest } from '../../shared/api/client'
 import type { Product, ProductVariant } from '../../shared/api/types'
 import { useCart } from '../../contexts/CartContext'
-import { Badge, Btn, SectionHeader } from '../../shared/components/Ui'
+import { Btn, SectionHeader } from '../../shared/components/Ui'
 
 function fmtPrice(n: number) { return n.toLocaleString('vi-VN') + ' ₫' }
 

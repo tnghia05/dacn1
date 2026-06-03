@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiRequest } from '../../shared/api/client'
@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Btn, SectionHeader, Tabs } from '../../shared/components/Ui'
 import { MemberBadge } from '../../shared/components/MemberBadge'
 
-type LeaderboardEntry = { rank: number; displayName: string; avatarUrl?: string; points: number }
+type LeaderboardEntry = { rank: number; id: string; displayName: string; avatarUrl?: string; points: number }
 
 function TopMembersList() {
   const { data, isLoading } = useQuery<LeaderboardEntry[]>({
@@ -38,42 +38,149 @@ function TopMembersList() {
         const rankColor = RANK_COLORS[m.rank - 1] ?? 'var(--muted-2)'
         const isTop = m.rank <= 3
         return (
-          <li
-            key={m.displayName}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '0.85rem',
-              padding: '0.3rem 0.5rem',
-              borderRadius: '7px',
-              background: m.rank === 1 ? 'rgb(251 191 36 / 6%)' : 'transparent',
-              transition: 'background 0.15s',
-            }}
-          >
-            <span style={{ display: 'flex', gap: '0.55rem', alignItems: 'center', minWidth: 0 }}>
-              <span style={{ color: rankColor, fontWeight: 800, fontSize: isTop ? '0.9rem' : '0.8rem', width: '22px', textAlign: 'center', flexShrink: 0 }}>
-                {m.rank === 1 ? '👑' : `#${m.rank}`}
+          <li key={m.id}>
+            <Link
+              to={`/users/${m.id}`}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.85rem',
+                padding: '0.3rem 0.5rem',
+                borderRadius: '7px',
+                background: m.rank === 1 ? 'rgb(251 191 36 / 6%)' : 'transparent',
+                transition: 'background 0.15s, transform 0.15s',
+                color: 'inherit',
+                textDecoration: 'none'
+              }}
+              className="hover-scale"
+            >
+              <span style={{ display: 'flex', gap: '0.55rem', alignItems: 'center', minWidth: 0 }}>
+                <span style={{ color: rankColor, fontWeight: 800, fontSize: isTop ? '0.9rem' : '0.8rem', width: '22px', textAlign: 'center', flexShrink: 0 }}>
+                  {m.rank === 1 ? '👑' : `#${m.rank}`}
+                </span>
+                {m.avatarUrl ? (
+                  <img src={m.avatarUrl} alt="" style={{ width: '22px', height: '22px', borderRadius: '5px', objectFit: 'cover', flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: '22px', height: '22px', borderRadius: '5px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent-2)', flexShrink: 0 }}>
+                    {m.displayName[0]?.toUpperCase()}
+                  </div>
+                )}
+                <strong style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  @{m.displayName}
+                </strong>
+                <MemberBadge points={m.points} size="sm" />
               </span>
-              {m.avatarUrl ? (
-                <img src={m.avatarUrl} alt="" style={{ width: '22px', height: '22px', borderRadius: '5px', objectFit: 'cover', flexShrink: 0 }} />
-              ) : (
-                <div style={{ width: '22px', height: '22px', borderRadius: '5px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent-2)', flexShrink: 0 }}>
-                  {m.displayName[0]?.toUpperCase()}
-                </div>
-              )}
-              <strong style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                @{m.displayName}
-              </strong>
-              <MemberBadge points={m.points} size="sm" />
-            </span>
-            <span style={{ color: isTop ? rankColor : 'var(--muted)', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', fontWeight: isTop ? 700 : 400, flexShrink: 0, marginLeft: '0.5rem' }}>
-              {m.points.toLocaleString('vi-VN')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>pts</span>
-            </span>
+              <span style={{ color: isTop ? rankColor : 'var(--muted)', fontVariantNumeric: 'tabular-nums', fontSize: '0.82rem', fontWeight: isTop ? 700 : 400, flexShrink: 0, marginLeft: '0.5rem' }}>
+                {m.points.toLocaleString('vi-VN')} <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>pts</span>
+              </span>
+            </Link>
           </li>
         )
       })}
     </ol>
+  )
+}
+
+function MemberSearchWidget() {
+  const [q, setQ] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQ(q.trim())
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [q])
+
+  const { data, isLoading } = useQuery<{ items: { id: string; displayName: string; avatarUrl?: string }[] }>({
+    queryKey: ['member-search', debouncedQ],
+    queryFn: () => apiRequest<{ items: { id: string; displayName: string; avatarUrl?: string }[] }>(`/search/users?q=${encodeURIComponent(debouncedQ)}&limit=5`),
+    enabled: debouncedQ.length >= 2,
+  })
+
+  const results = data?.items ?? []
+
+  return (
+    <div className="surface-card" style={{ padding: '1rem' }}>
+      <span style={{ fontSize: '0.88rem', fontWeight: 800, display: 'block', marginBottom: '0.65rem' }}>
+        🔍 Tìm kiếm thành viên
+      </span>
+      <div style={{ position: 'relative' }}>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Nhập tên thành viên..."
+          style={{
+            width: '100%',
+            padding: '0.5rem 0.75rem',
+            fontSize: '0.84rem',
+            background: 'var(--bg)',
+            border: '1px solid var(--line)',
+            borderRadius: '8px',
+            color: 'var(--text)',
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+        {isLoading && (
+          <div
+            style={{
+              position: 'absolute',
+              right: '0.75rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              fontSize: '0.8rem',
+              color: 'var(--muted)',
+            }}
+          >
+            ...
+          </div>
+        )}
+      </div>
+
+      {debouncedQ.length >= 2 && !isLoading && (
+        <div style={{ marginTop: '0.55rem' }}>
+          {results.length > 0 ? (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: '0.45rem' }}>
+              {results.map((m) => (
+                <li key={m.id}>
+                  <Link
+                    to={`/users/${m.id}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.35rem 0.5rem',
+                      borderRadius: '6px',
+                      background: 'var(--surface-2)',
+                      color: 'inherit',
+                      textDecoration: 'none',
+                      transition: 'background 0.15s',
+                    }}
+                    className="hover-scale"
+                  >
+                    {m.avatarUrl ? (
+                      <img src={m.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent-2)' }}>
+                        {m.displayName[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>@{m.displayName}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center' }}>
+              Không tìm thấy thành viên.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -256,13 +363,19 @@ export function CommunityPage() {
               <article key={p._id} className="surface-card" style={{ padding: '1.1rem 1.25rem', display: 'grid', gap: '0.6rem' }}>
                 {/* Author row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', flexShrink: 0, overflow: 'hidden' }}>
-                    {p.author?.avatarUrl
-                      ? <img src={p.author.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-2)' }}>{p.author?.displayName?.[0]?.toUpperCase()}</div>
-                    }
-                  </div>
-                  <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>@{p.author?.displayName}</span>
+                  <Link
+                    to={`/users/${p.authorId}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'inherit', textDecoration: 'none' }}
+                    className="hover-scale"
+                  >
+                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', flexShrink: 0, overflow: 'hidden' }}>
+                      {p.author?.avatarUrl
+                        ? <img src={p.author.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-2)' }}>{p.author?.displayName?.[0]?.toUpperCase()}</div>
+                      }
+                    </div>
+                    <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>@{p.author?.displayName}</span>
+                  </Link>
                   <span style={{ fontSize: '0.76rem', color: 'var(--muted-2)', marginLeft: 'auto' }}>{timeAgo(p.createdAt)}</span>
                 </div>
 
@@ -536,6 +649,8 @@ export function CommunityPage() {
               )}
             </div>
           </div>
+
+          <MemberSearchWidget />
 
           <div className="surface-card">
             <SectionHeader title="Top thành viên" subtitle="Điểm tích lũy" />

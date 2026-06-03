@@ -10,6 +10,7 @@ type SearchResults = {
   news?: NewsItem[]
   posts?: Post[]
   products?: Product[]
+  users?: { id: string; displayName: string; avatarUrl?: string }[]
   total?: number
 }
 
@@ -24,7 +25,7 @@ export function SearchPage() {
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
   const tag = normalizeTagParam(params.get('tag'))
-  const scope = (params.get('scope') ?? 'all') as 'all' | 'news' | 'posts' | 'products'
+  const scope = (params.get('scope') ?? 'all') as 'all' | 'news' | 'posts' | 'products' | 'users'
   const inputRef = useRef<HTMLInputElement>(null)
 
   const { data: tagData, isLoading: tagLoading } = useQuery({
@@ -40,7 +41,7 @@ export function SearchPage() {
     queryKey: ['search', q, scope],
     queryFn: async (): Promise<SearchResults> => {
       const limit = '10'
-      const out: SearchResults = { news: [], posts: [], products: [], total: 0 }
+      const out: SearchResults = { news: [], posts: [], products: [], users: [], total: 0 }
       if (scope === 'all' || scope === 'posts') {
         const r = await apiRequest<PaginatedResponse<Post>>(
           `/search/posts?${new URLSearchParams({ q, limit, tab: 'latest' })}`,
@@ -57,7 +58,17 @@ export function SearchPage() {
       if (scope === 'all' || scope === 'news') {
         out.news = []
       }
-      out.total = (out.news?.length ?? 0) + (out.posts?.length ?? 0) + (out.products?.length ?? 0)
+      if (scope === 'all' || scope === 'users') {
+        const r = await apiRequest<{ items: { id: string; displayName: string; avatarUrl?: string }[] }>(
+          `/search/users?${new URLSearchParams({ q, limit: '20' })}`,
+        )
+        out.users = r.items
+      }
+      out.total =
+        (out.news?.length ?? 0) +
+        (out.posts?.length ?? 0) +
+        (out.products?.length ?? 0) +
+        (out.users?.length ?? 0)
       return out
     },
     enabled: q.length > 0 && tag.length === 0,
@@ -74,8 +85,11 @@ export function SearchPage() {
   const posts = tag.length > 0 ? (tagData?.items ?? []) : (data?.posts ?? [])
   const news = data?.news ?? []
   const products = data?.products ?? []
+  const users = data?.users ?? []
   const totalHits =
-    tag.length > 0 ? posts.length : news.length + posts.length + products.length
+    tag.length > 0
+      ? posts.length
+      : news.length + posts.length + products.length + users.length
 
   const show = (key: typeof scope) => scope === 'all' || scope === key
   const headline =
@@ -91,7 +105,7 @@ export function SearchPage() {
         ) : q ? (
           <p>{isLoading ? 'Đang tìm…' : `${totalHits} kết quả`}</p>
         ) : (
-          <p>Tìm tin tức, bài viết cộng đồng và sản phẩm.</p>
+          <p>Tìm tin tức, bài viết cộng đồng, sản phẩm và thành viên.</p>
         )}
         <form onSubmit={onSubmit} style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <input
@@ -119,6 +133,7 @@ export function SearchPage() {
             { id: 'news', label: 'Tin tức' },
             { id: 'posts', label: 'Cộng đồng' },
             { id: 'products', label: 'Sản phẩm' },
+            { id: 'users', label: 'Thành viên' },
           ]}
           active={scope}
           onChange={(id) => setParams({ q, scope: id })}
@@ -159,7 +174,7 @@ export function SearchPage() {
 
       {/* Posts (từ khoá hoặc hashtag) */}
       {(tag.length > 0 || show('posts')) && posts.length > 0 && (
-        <section>
+        <section style={{ marginBottom: '2rem' }}>
           <SectionHeader
             title="Cộng đồng"
             subtitle={`${posts.length} ${tag.length > 0 ? 'bài' : 'kết quả'}`}
@@ -169,8 +184,8 @@ export function SearchPage() {
               <Link
                 key={p._id}
                 to={`/community/${p._id}`}
-                className="surface-card"
-                style={{ color: 'inherit', display: 'grid', gap: '0.25rem', padding: '0.9rem 1.1rem' }}
+                className="surface-card hover-glow"
+                style={{ color: 'inherit', display: 'grid', gap: '0.25rem', padding: '0.9rem 1.1rem', textDecoration: 'none' }}
               >
                 <strong style={{ fontWeight: 700, fontSize: '0.95rem' }}>{p.title}</strong>
                 <div style={{ display: 'flex', gap: '0.6rem', fontSize: '0.78rem', color: 'var(--muted-2)' }}>
@@ -186,7 +201,7 @@ export function SearchPage() {
 
       {/* Products */}
       {tag.length === 0 && show('products') && products.length > 0 && (
-        <section>
+        <section style={{ marginBottom: '2rem' }}>
           <SectionHeader title="Sản phẩm" subtitle={`${products.length} kết quả`} />
           <div className="product-grid" style={{ marginTop: '0.85rem' }}>
             {products.map((p) => (
@@ -195,6 +210,35 @@ export function SearchPage() {
                 <div className="product-card-body">
                   <strong>{p.name}</strong>
                   <span style={{ color: 'var(--accent-2)', fontWeight: 700 }}>{fmt(p.price)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Users */}
+      {tag.length === 0 && show('users') && users.length > 0 && (
+        <section style={{ marginBottom: '2rem' }}>
+          <SectionHeader title="Thành viên" subtitle={`${users.length} kết quả`} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.85rem', marginTop: '0.85rem' }}>
+            {users.map((u) => (
+              <Link
+                key={u.id}
+                to={`/users/${u.id}`}
+                className="surface-card hover-glow"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.9rem 1.1rem', color: 'inherit', textDecoration: 'none', transition: 'all 0.2s' }}
+              >
+                {u.avatarUrl ? (
+                  <img src={u.avatarUrl} alt={u.displayName} style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-line)' }} />
+                ) : (
+                  <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--accent-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-2)', border: '2px solid var(--accent-line)' }}>
+                    {u.displayName[0]?.toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{u.displayName}</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Xem hồ sơ</div>
                 </div>
               </Link>
             ))}

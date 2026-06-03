@@ -184,6 +184,7 @@ export type Product = {
   tags?: string[]
   variants?: ProductVariant[]
   pointsPrice?: number
+  badge?: string
   createdAt?: string
 }
 
@@ -223,16 +224,6 @@ export type Order = {
   createdAt?: string
 }
 
-export type Notification = {
-  _id: string
-  type: string
-  title?: string
-  body?: string
-  message?: string
-  read: boolean
-  link?: string
-  createdAt: string
-}
 
 export type HashtagTrend = {
   tag: string

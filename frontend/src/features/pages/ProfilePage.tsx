@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { apiRequest, ApiError, getPresignedUrl, apiUpload } from '../../shared/api/client'
 import type { Post, PaginatedResponse } from '../../shared/api/types'
 import { useAuth } from '../../contexts/AuthContext'
 import { Btn, Tabs } from '../../shared/components/Ui'
 import { MemberBadge } from '../../shared/components/MemberBadge'
 import { getTierFromPoints, TIER_CONFIG, TIER_THRESHOLDS, pointsToNextTier } from '../../shared/utils/membership'
+import { VerifiedBadge } from '../../shared/components/VerifiedBadge'
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
@@ -21,7 +22,6 @@ type ProfileStats = { postCount: number; commentCount: number; likeCount: number
 export function ProfilePage() {
   const { user, logout, setUser } = useAuth()
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const [tab, setTab] = useState('posts')
   const [editMode, setEditMode] = useState(false)
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
@@ -260,8 +260,8 @@ export function ProfilePage() {
                 WebkitTextFillColor: cfg.gradient !== 'none' ? 'transparent' : cfg.nameCss,
                 color: cfg.gradient !== 'none' ? 'transparent' : cfg.nameCss,
               } : {}}>@{user.displayName}</span>
-              <MemberBadge points={user.points ?? 0} size="md" showLabel />
-              {tier === 'vvip' && <span title="Tài khoản xác minh" style={{ fontSize: '0.9rem' }}>✅</span>}
+               <MemberBadge points={user.points ?? 0} size="md" showLabel />
+              {tier === 'vvip' && <VerifiedBadge size={18} />}
             </h1>
           )}
           {saveError && <p style={{ margin: 0, color: '#f87171', fontSize: '0.82rem' }}>{saveError}</p>}

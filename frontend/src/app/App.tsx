@@ -37,6 +37,7 @@ import { PlayerDetailPage } from '../features/pages/PlayerDetailPage'
 import { PlayersPage } from '../features/pages/PlayersPage'
 import { ProductDetailPage } from '../features/pages/ProductDetailPage'
 import { ProfilePage } from '../features/pages/ProfilePage'
+import { UserProfilePage } from '../features/pages/UserProfilePage'
 import { RegisterPage } from '../features/pages/RegisterPage'
 import { SearchPage } from '../features/pages/SearchPage'
 import { SettingsPage } from '../features/pages/SettingsPage'
@@ -99,6 +100,7 @@ function App() {
                 <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
                 <Route path="/order/success" element={<OrderSuccessPage />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/users/:id" element={<UserProfilePage />} />
                 <Route path="/trending" element={<TrendingPage />} />
                 <Route path="/notifications" element={<PrivateRoute><NotificationsPage /></PrivateRoute>} />
                 <Route path="/auth/login" element={<LoginPage />} />
